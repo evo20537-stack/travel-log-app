@@ -19,6 +19,7 @@ export interface WeatherDay {
 
 export interface ScheduleEvent {
   id: string;
+  date: string;
   time: string;
   title: string;
   location: string;

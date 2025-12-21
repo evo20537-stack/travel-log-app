@@ -6,7 +6,7 @@ import Schedule from './screens/Schedule';
 import Expenses from './screens/Expenses';
 import Bookings from './screens/Bookings';
 import Planning from './screens/Planning';
-import { AppTab, Trip, ScheduleEvent } from './types';
+import { AppTab, Trip, ScheduleEvent, Expense } from './types';
 import { Camera, Utensils, Train } from 'lucide-react';
 
 const MOCK_TRIPS: Trip[] = [
@@ -27,6 +27,20 @@ const MOCK_EVENTS: Record<string, ScheduleEvent[]> = {
   '1': [
     { id: 'e1', time: '09:00', title: '雷門 & 淺草寺', location: '淺草', type: 'activity', color: 'bg-red-100 text-red-500', icon: Camera, notes: '記得去遊客中心頂樓看晴空塔' },
     { id: 'e2', time: '12:00', title: '敘敘苑燒肉', location: '晴空塔 30F', type: 'food', color: 'bg-orange-100 text-orange-500', icon: Utensils, notes: '已訂位 12:00，窗邊座位' }
+  ]
+};
+
+// 從 Expenses.tsx 搬移過來，作為 App.tsx 的初始資料
+const MOCK_INITIAL_EXPENSES: Record<string, Expense[]> = {
+  '1': [ // Tokyo
+    { id: '1', item: '一蘭拉麵', amount: 2560, currency: 'JPY', payer: 'Me', category: 'food', date: '2024-04-12' },
+    { id: '2', item: '西瓜卡儲值', amount: 3000, currency: 'JPY', payer: 'Me', category: 'transport', date: '2024-04-12' },
+    { id: '3', item: '伴手禮', amount: 5000, currency: 'JPY', payer: 'Wife', category: 'shopping', date: '2024-04-11' },
+    { id: '4', item: '機場接送', amount: 1200, currency: 'TWD', payer: 'Me', category: 'transport', date: '2024-04-10' },
+  ],
+  '2': [ // Kyoto
+    { id: '5', item: '和服租借', amount: 8000, currency: 'JPY', payer: 'Me', category: 'shopping', date: '2024-11-21' },
+    { id: '6', item: '嵐山小火車', amount: 1600, currency: 'JPY', payer: 'Me', category: 'transport', date: '2024-11-22' }
   ]
 };
 
@@ -62,6 +76,12 @@ const App: React.FC = () => {
     };
   });
 
+  // 新增 allExpenses 狀態
+  const [allExpenses, setAllExpenses] = useState<Record<string, Expense[]>>(() => {
+    const saved = localStorage.getItem('travel_expenses');
+    return saved ? JSON.parse(saved) : MOCK_INITIAL_EXPENSES;
+  });
+
   // 當資料變動時，自動同步到 LocalStorage
   useEffect(() => {
     localStorage.setItem('travel_trips', JSON.stringify(trips));
@@ -83,6 +103,11 @@ const App: React.FC = () => {
     localStorage.setItem('travel_user_profile', JSON.stringify(userProfile));
   }, [userProfile]);
 
+  useEffect(() => {
+    localStorage.setItem('travel_expenses', JSON.stringify(allExpenses));
+  }, [allExpenses]);
+
+
   const handleCompleteEvent = (eventId: string) => {
     setCompletedEventIds(prev => new Set([...prev, eventId]));
   };
@@ -95,9 +120,19 @@ const App: React.FC = () => {
     });
   };
 
+  // 新增 handleAddExpense 函數
+  const handleAddExpense = (newExpense: Expense) => {
+    if (!currentTripId) return;
+    setAllExpenses(prev => ({
+      ...prev,
+      [currentTripId]: [...(prev[currentTripId] || []), newExpense]
+    }));
+  };
+
   const renderContent = () => {
     const currentTrip = trips.find(t => t.id === currentTripId) || trips[0];
     const currentEvents = currentTrip ? (allEvents[currentTrip.id] || []) : [];
+    const currentExpenses = currentTrip ? (allExpenses[currentTrip.id] || []) : []; // 取得當前行程的支出
 
     switch (activeTab) {
       case AppTab.DASHBOARD: 
@@ -127,6 +162,7 @@ const App: React.FC = () => {
             completedEventIds={completedEventIds}
             onCompleteEvent={handleCompleteEvent}
             onUndoCompleteEvent={handleUndoCompleteEvent}
+            expenses={currentExpenses} // 傳遞當前行程的支出
           />
         );
       case AppTab.SCHEDULE: 
@@ -138,7 +174,14 @@ const App: React.FC = () => {
           />
         ) : null;
       case AppTab.BOOKINGS: return <Bookings currentTripId={currentTripId} />;
-      case AppTab.EXPENSES: return <Expenses currentTripId={currentTripId} />;
+      case AppTab.EXPENSES: 
+        return (
+          <Expenses 
+            currentTripId={currentTripId} 
+            expenses={currentExpenses} // 傳遞當前行程的支出
+            onAddExpense={handleAddExpense} // 傳遞新增支出的函數
+          />
+        );
       case AppTab.PLANNING: return <Planning currentTripId={currentTripId} />;
       default: return null;
     }

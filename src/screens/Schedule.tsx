@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { 
   Train, Camera, Utensils, BedDouble, ShoppingBag, 
-  MapPin, Edit2, Plus, Trash2, Clock, Map, AlignLeft, Link as LinkIcon
+  MapPin, Edit2, Plus, Trash2, Clock, Map, AlignLeft, Link as LinkIcon, CalendarDays
 } from 'lucide-react';
 import { Reorder, useDragControls, useMotionValue, motion } from 'framer-motion';
 import { Trip, ScheduleEvent } from '../types';
+import { format, parseISO, formatISO, parse } from 'date-fns';
 
 interface ScheduleProps {
   currentTrip: Trip;
@@ -15,7 +16,6 @@ interface ScheduleProps {
   onUpdateEvents: (events: ScheduleEvent[]) => void;
 }
 
-// Type Definitions for Form
 type EventType = 'activity' | 'food' | 'transport' | 'stay' | 'shopping';
 
 const EVENT_TYPES: { type: EventType; label: string; icon: any; color: string }[] = [
@@ -26,7 +26,6 @@ const EVENT_TYPES: { type: EventType; label: string; icon: any; color: string }[
   { type: 'shopping', label: '購物', icon: ShoppingBag, color: 'bg-pink-100 text-pink-500' },
 ];
 
-// --- Sub-component for individual sortable item ---
 interface ScheduleItemProps {
   event: ScheduleEvent;
   onDetail: () => void;
@@ -35,30 +34,20 @@ interface ScheduleItemProps {
   onDelete: () => void;
 }
 
-const ScheduleItem: React.FC<ScheduleItemProps> = ({ 
-  event, 
-  onDetail, 
-  onEdit, 
-  onMap, 
-  onDelete 
-}) => {
+const ScheduleItem: React.FC<ScheduleItemProps> = ({ event, onDetail, onEdit, onMap, onDelete }) => {
   const dragControls = useDragControls();
   const x = useMotionValue(0);
-
-  // ✅ 修正後的寫法：總是根據 event.type 重新抓取正確的 Icon
   const typeConfig = EVENT_TYPES.find(t => t.type === event.type);
   const EventIcon = typeConfig ? typeConfig.icon : MapPin;
-  
   const [isPressing, setIsPressing] = useState(false);
 
-  // Detect long press to start drag
   const handlePointerDown = (e: React.PointerEvent) => {
     setIsPressing(true);
     const timeout = setTimeout(() => {
       if (navigator.vibrate) navigator.vibrate(50);
       dragControls.start(e);
       setIsPressing(false);
-    }, 500); // 500ms long press
+    }, 500);
 
     const cancel = () => {
       clearTimeout(timeout);
@@ -69,39 +58,36 @@ const ScheduleItem: React.FC<ScheduleItemProps> = ({
     e.target.addEventListener('pointermove', cancel, { once: true });
     e.target.addEventListener('pointercancel', cancel, { once: true });
   };
+  
+  const displayTime = useMemo(() => {
+    try {
+      return format(parseISO(event.date), 'HH:mm');
+    } catch (e) {
+      // Fallback for old time-only format
+      return event.time;
+    }
+  }, [event.date, event.time]);
+
 
   return (
-    <Reorder.Item
-      value={event}
-      dragListener={false} // Disable default drag to allow swipe/scroll
-      dragControls={dragControls}
-      className="relative mb-4 select-none"
-    >
+    <Reorder.Item value={event} dragListener={false} dragControls={dragControls} className="relative mb-4 select-none">
       <div className="flex gap-4 relative items-start">
-         {/* Time Column */}
          <div className="flex flex-col items-center min-w-[56px] pt-1 shrink-0">
             <span className="text-sm font-bold text-stone-500 bg-[#F7F4EB] px-1 z-10 relative">
-               {event.time}
+               {displayTime}
             </span>
          </div>
-
-         {/* Draggable/Swipable Content */}
          <div className="flex-1 relative">
-            {/* Background Delete Layer */}
             <div className="absolute inset-y-0 right-0 left-10 bg-red-100 rounded-2xl flex items-center justify-end pr-6">
                 <Trash2 className="text-red-500" size={24} />
             </div>
-
-            {/* Main Card */}
             <motion.div
               style={{ x }}
               drag="x"
               dragConstraints={{ left: -100, right: 0 }}
               dragElastic={0.1}
               onDragEnd={(_, info) => {
-                if (info.offset.x < -80) {
-                  onDelete();
-                }
+                if (info.offset.x < -80) onDelete();
               }}
               onPointerDown={handlePointerDown}
               className={`relative bg-white rounded-2xl transition-transform ${isPressing ? 'scale-[0.98]' : ''}`}
@@ -110,12 +96,9 @@ const ScheduleItem: React.FC<ScheduleItemProps> = ({
                 className="flex items-center gap-3 py-3 relative border-2 border-stone-100 active:border-orange-200"
                 onClick={onDetail}
               >
-                {/* Icon Box */}
                 <div className={`p-3 rounded-xl shrink-0 ${event.color}`}>
                   <EventIcon size={20} />
                 </div>
-
-                {/* Text Info */}
                 <div className="flex-1 min-w-0">
                   <h4 className="font-bold text-stone-800 truncate">{event.title}</h4>
                   {event.transitTime ? (
@@ -129,19 +112,11 @@ const ScheduleItem: React.FC<ScheduleItemProps> = ({
                     </div>
                   )}
                 </div>
-
-                {/* Quick Actions */}
                 <div className="flex flex-col gap-1 border-l border-stone-100 pl-2" onPointerDown={(e) => e.stopPropagation()}>
-                   <button 
-                     onClick={(e) => onMap(e)}
-                     className={`p-1.5 rounded-lg transition-colors ${event.mapUrl ? 'text-orange-500 bg-orange-50' : 'text-stone-400 hover:text-orange-500 hover:bg-orange-50'}`}
-                   >
+                   <button onClick={(e) => onMap(e)} className={`p-1.5 rounded-lg transition-colors ${event.mapUrl ? 'text-orange-500 bg-orange-50' : 'text-stone-400 hover:text-orange-500 hover:bg-orange-50'}`}>
                      <Map size={16} />
                    </button>
-                   <button 
-                     onClick={(e) => onEdit(e)}
-                     className="p-1.5 text-stone-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                   >
+                   <button onClick={(e) => onEdit(e)} className="p-1.5 text-stone-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors">
                      <Edit2 size={16} />
                    </button>
                 </div>
@@ -155,35 +130,27 @@ const ScheduleItem: React.FC<ScheduleItemProps> = ({
 
 
 const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents }) => {
-  // Modals State
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<ScheduleEvent | null>(null);
   const [viewingEvent, setViewingEvent] = useState<ScheduleEvent | null>(null);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Form Data State
-  const [formData, setFormData] = useState<{
-    time: string;
-    title: string;
-    location: string;
-    mapUrl: string;
-    type: EventType;
-    notes: string;
-    transitTime: string;
-  }>({
-    time: '12:00',
+  const [formData, setFormData] = useState({
+    date: selectedDate,
+    time: '09:00',
     title: '',
     location: '',
     mapUrl: '',
-    type: 'activity',
+    type: 'activity' as EventType,
     notes: '',
-    transitTime: ''
+    transitTime: '',
   });
 
-  // Handlers
   const handleOpenAdd = () => {
     setEditingEvent(null);
     setFormData({
+      date: selectedDate,
       time: '09:00',
       title: '',
       location: '',
@@ -196,10 +163,12 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
   };
 
   const handleOpenEdit = (e: React.MouseEvent, event: ScheduleEvent) => {
-    e.stopPropagation(); // Prevent opening detail modal
+    e.stopPropagation();
     setEditingEvent(event);
+    const eventDate = parseISO(event.date);
     setFormData({
-      time: event.time,
+      date: format(eventDate, 'yyyy-MM-dd'),
+      time: format(eventDate, 'HH:mm'),
       title: event.title,
       location: event.location,
       mapUrl: event.mapUrl || '',
@@ -218,18 +187,22 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
   const handleDelete = (id: string) => {
     if (confirm('確定要刪除這個行程嗎？')) {
       onUpdateEvents(events.filter(e => e.id !== id));
-      setIsFormOpen(false);
+      setIsFormOpen(false); // Close form if deleting from it
+      setIsDetailOpen(false); // Close detail if deleting from it
     }
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    
     const typeConfig = EVENT_TYPES.find(t => t.type === formData.type) || EVENT_TYPES[0];
     
+    // Combine date and time into a single ISO string
+    const combinedDateTime = `${formData.date}T${formData.time}:00`;
+
     const newEvent: ScheduleEvent = {
       id: editingEvent ? editingEvent.id : Date.now().toString(),
-      time: formData.time,
+      date: combinedDateTime,
+      time: format(parseISO(combinedDateTime), 'HH:mm'), // Keep time for legacy display if needed
       title: formData.title,
       location: formData.location,
       mapUrl: formData.mapUrl,
@@ -240,27 +213,51 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
       color: typeConfig.color
     };
 
+    let updatedList;
     if (editingEvent) {
-      onUpdateEvents(events.map(ev => ev.id === editingEvent.id ? newEvent : ev));
+      updatedList = events.map(ev => ev.id === editingEvent.id ? newEvent : ev);
     } else {
-      // Add new event and sort by time
-      const updatedList = [...events, newEvent].sort((a, b) => a.time.localeCompare(b.time));
-      onUpdateEvents(updatedList);
+      updatedList = [...events, newEvent];
     }
+    
+    // Sort by the new combined date property
+    updatedList.sort((a, b) => a.date.localeCompare(b.date));
+
+    onUpdateEvents(updatedList);
     setIsFormOpen(false);
   };
 
-  // Navigation Logic
   const handleMapNavigation = (e: React.MouseEvent, location: string, mapUrl?: string) => {
     e.stopPropagation();
     if (mapUrl && mapUrl.trim() !== '') {
        window.open(mapUrl, '_blank');
     } else {
-       // Fallback to query search
        const query = encodeURIComponent(location);
        window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
     }
   };
+
+  // Group events by date
+  const groupedEvents = useMemo(() => {
+    return events.reduce((acc, event) => {
+      try {
+        const eventDate = format(parseISO(event.date), 'yyyy-MM-dd');
+        if (!acc[eventDate]) {
+          acc[eventDate] = [];
+        }
+        acc[eventDate].push(event);
+      } catch(e) {
+        // Fallback for old data
+        const fallbackDate = "未分類日期";
+        if (!acc[fallbackDate]) acc[fallbackDate] = [];
+        acc[fallbackDate].push(event);
+      }
+      return acc;
+    }, {} as Record<string, ScheduleEvent[]>);
+  }, [events]);
+
+  const sortedDates = Object.keys(groupedEvents).sort((a, b) => a.localeCompare(b));
+
 
   return (
     <div className="pb-24 animate-fade-in">
@@ -271,11 +268,6 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
             <h2 className="text-2xl font-black text-stone-800">行程表 📅</h2>
           </div>
           <div className="flex gap-2">
-            <select className="bg-white border border-stone-200 rounded-lg px-2 py-1 text-sm font-bold text-stone-600 outline-none max-w-[100px]">
-              <option>Day 1</option>
-              <option>Day 2</option>
-              <option selected>Day 3</option>
-            </select>
             <button 
               onClick={handleOpenAdd}
               className="bg-stone-800 text-white p-1.5 rounded-lg active:scale-95 transition-transform"
@@ -295,23 +287,32 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
            </Button>
         </div>
       ) : (
-        <div className="relative">
-          {/* Timeline Line */}
-          <div className="absolute left-[27px] top-4 bottom-10 w-0.5 bg-stone-200 border-l-2 border-dashed border-stone-300 -z-10"></div>
-          
-          <Reorder.Group axis="y" values={events} onReorder={onUpdateEvents}>
-            {events.map((event) => (
-              <ScheduleItem 
-                key={event.id} 
-                event={event}
-                onDetail={() => handleOpenDetail(event)}
-                onEdit={(e) => handleOpenEdit(e, event)}
-                onMap={(e) => handleMapNavigation(e, event.location, event.mapUrl)}
-                onDelete={() => handleDelete(event.id)}
-              />
-            ))}
-          </Reorder.Group>
-          
+        <div className="space-y-8">
+          {sortedDates.map(date => (
+            <div key={date}>
+              <h3 className="flex items-center gap-2 font-black text-orange-500 bg-orange-50 rounded-full px-3 py-1 w-fit mb-4 -ml-1">
+                <CalendarDays size={14}/>
+                <span className="text-sm tracking-wider">
+                  {date === "未分類日期" ? date : format(parseISO(date), 'M 月 d 日')}
+                </span>
+              </h3>
+              <div className="relative">
+                <div className="absolute left-[27px] top-4 bottom-10 w-0.5 bg-stone-200 border-l-2 border-dashed border-stone-300 -z-10"></div>
+                <Reorder.Group axis="y" values={groupedEvents[date]} onReorder={(newOrder) => onUpdateEvents([...events.filter(e => format(parseISO(e.date), 'yyyy-MM-dd') !== date), ...newOrder])}>
+                  {groupedEvents[date].map((event) => (
+                    <ScheduleItem 
+                      key={event.id} 
+                      event={event}
+                      onDetail={() => handleOpenDetail(event)}
+                      onEdit={(e) => handleOpenEdit(e, event)}
+                      onMap={(e) => handleMapNavigation(e, event.location, event.mapUrl)}
+                      onDelete={() => handleDelete(event.id)}
+                    />
+                  ))}
+                </Reorder.Group>
+              </div>
+            </div>
+          ))}
           <p className="text-center text-xs text-stone-400 mt-6 font-bold opacity-60">
              長按行程可拖曳排序・向左滑動可刪除
           </p>
@@ -319,16 +320,11 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
       )}
 
       {/* --- DETAIL MODAL --- */}
-      <Modal 
-        isOpen={isDetailOpen} 
-        onClose={() => setIsDetailOpen(false)} 
-        title="行程詳情"
-      >
+      <Modal isOpen={isDetailOpen} onClose={() => setIsDetailOpen(false)} title="行程詳情">
         {viewingEvent && (
           <div className="space-y-5">
             <div className="flex items-center gap-4">
               <div className={`p-4 rounded-2xl ${viewingEvent.color}`}>
-                 {/* 這裡也修正了：直接根據 type 顯示 icon */}
                  {(() => {
                     const typeConfig = EVENT_TYPES.find(t => t.type === viewingEvent.type);
                     const Icon = typeConfig ? typeConfig.icon : MapPin;
@@ -336,9 +332,9 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
                  })()}
               </div>
               <div>
-                <span className="text-sm font-bold text-stone-400 bg-stone-100 px-2 py-0.5 rounded-md">
-                   {viewingEvent.time}
-                </span>
+                 <span className="text-sm font-bold text-stone-400 bg-stone-100 px-2 py-0.5 rounded-md">
+                    {format(parseISO(viewingEvent.date), 'M/d HH:mm')}
+                 </span>
                 <h3 className="text-2xl font-black text-stone-800 mt-1">{viewingEvent.title}</h3>
               </div>
             </div>
@@ -356,27 +352,21 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
                    )}
                  </div>
                </div>
-               
                {viewingEvent.notes && (
                  <div className="flex items-start gap-3">
                    <AlignLeft className="text-stone-400 mt-0.5" size={18} />
                    <div>
                      <p className="text-xs font-bold text-stone-400">備註</p>
-                     <p className="text-sm text-stone-600 leading-relaxed whitespace-pre-wrap">
-                       {viewingEvent.notes}
-                     </p>
+                     <p className="text-sm text-stone-600 leading-relaxed whitespace-pre-wrap">{viewingEvent.notes}</p>
                    </div>
                  </div>
                )}
-
                {viewingEvent.transitTime && (
                  <div className="flex items-start gap-3">
                    <Clock className="text-stone-400 mt-0.5" size={18} />
                    <div>
                      <p className="text-xs font-bold text-stone-400">交通時間</p>
-                     <p className="text-sm font-bold text-stone-600">
-                       {viewingEvent.transitTime}
-                     </p>
+                     <p className="text-sm font-bold text-stone-600">{viewingEvent.transitTime}</p>
                    </div>
                  </div>
                )}
@@ -391,7 +381,6 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
                 className="flex-1" 
                 onClick={() => {
                   setIsDetailOpen(false);
-                  setEditingEvent(viewingEvent);
                   handleOpenEdit({ stopPropagation: () => {} } as any, viewingEvent);
                 }}
               >
@@ -403,14 +392,20 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
       </Modal>
 
       {/* --- ADD / EDIT FORM MODAL --- */}
-      <Modal 
-        isOpen={isFormOpen} 
-        onClose={() => setIsFormOpen(false)} 
-        title={editingEvent ? "編輯行程" : "新增行程"}
-      >
+      <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title={editingEvent ? "編輯行程" : "新增行程"}>
         <form onSubmit={handleSave} className="space-y-4">
           <div className="flex gap-3">
-             <div className="w-1/3">
+             <div className="w-1/2">
+                <label className="block text-xs font-bold text-stone-400 mb-1">日期</label>
+                <input 
+                  type="date"
+                  required
+                  className="w-full px-3 py-3 rounded-xl border-2 border-stone-100 font-bold text-stone-700 focus:border-orange-400 focus:outline-none bg-stone-50"
+                  value={formData.date}
+                  onChange={e => setFormData({...formData, date: e.target.value})}
+                />
+             </div>
+             <div className="w-1/2">
                 <label className="block text-xs font-bold text-stone-400 mb-1">時間</label>
                 <input 
                   type="time"
@@ -420,16 +415,17 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
                   onChange={e => setFormData({...formData, time: e.target.value})}
                 />
              </div>
-             <div className="flex-1">
-                <label className="block text-xs font-bold text-stone-400 mb-1">名稱</label>
-                <input 
-                  required
-                  placeholder="行程名稱..."
-                  className="w-full px-3 py-3 rounded-xl border-2 border-stone-100 font-bold text-stone-700 focus:border-orange-400 focus:outline-none"
-                  value={formData.title}
-                  onChange={e => setFormData({...formData, title: e.target.value})}
-                />
-             </div>
+          </div>
+          
+          <div>
+            <label className="block text-xs font-bold text-stone-400 mb-1">名稱</label>
+            <input 
+              required
+              placeholder="行程名稱..."
+              className="w-full px-3 py-3 rounded-xl border-2 border-stone-100 font-bold text-stone-700 focus:border-orange-400 focus:outline-none"
+              value={formData.title}
+              onChange={e => setFormData({...formData, title: e.target.value})}
+            />
           </div>
 
           <div>

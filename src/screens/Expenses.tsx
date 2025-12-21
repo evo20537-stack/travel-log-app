@@ -7,23 +7,14 @@ import { Expense } from '../types';
 
 interface ExpensesProps {
   currentTripId: string;
+  expenses: Expense[]; // 從 App.tsx 接收 expenses
+  onAddExpense: (expense: Expense) => void; // 從 App.tsx 接收新增支出的函數
 }
 
 // 匯率常數 (僅用於計算比例圖的權重，不顯示換算金額)
 const JPY_RATE_WEIGHT = 0.215;
 
-const MOCK_INITIAL_DATA: Record<string, Expense[]> = {
-  '1': [ // Tokyo
-    { id: '1', item: '一蘭拉麵', amount: 2560, currency: 'JPY', payer: 'Me', category: 'food', date: '2024-04-12' },
-    { id: '2', item: '西瓜卡儲值', amount: 3000, currency: 'JPY', payer: 'Me', category: 'transport', date: '2024-04-12' },
-    { id: '3', item: '伴手禮', amount: 5000, currency: 'JPY', payer: 'Wife', category: 'shopping', date: '2024-04-11' },
-    { id: '4', item: '機場接送', amount: 1200, currency: 'TWD', payer: 'Me', category: 'transport', date: '2024-04-10' },
-  ],
-  '2': [ // Kyoto
-    { id: '5', item: '和服租借', amount: 8000, currency: 'JPY', payer: 'Me', category: 'shopping', date: '2024-11-21' },
-    { id: '6', item: '嵐山小火車', amount: 1600, currency: 'JPY', payer: 'Me', category: 'transport', date: '2024-11-22' }
-  ]
-};
+// 將 MOCK_INITIAL_DATA 移至 App.tsx 管理，此處不再需要
 
 // 優化配色配置，確保對比度
 const CATEGORIES = [
@@ -35,8 +26,8 @@ const CATEGORIES = [
   { id: 'other', label: '其他', icon: Coffee, color: 'bg-stone-200 text-stone-600', activeBorder: 'border-stone-500', barColor: 'bg-stone-500' },
 ];
 
-const Expenses: React.FC<ExpensesProps> = ({ currentTripId }) => {
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+const Expenses: React.FC<ExpensesProps> = ({ currentTripId, expenses, onAddExpense }) => {
+  // 移除 Expenses 內部管理 expenses 狀態的邏輯，現在從 props 接收
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -50,10 +41,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTripId }) => {
     payer: 'Me'
   });
 
-  // Reset expenses when trip changes
-  useEffect(() => {
-    setExpenses(MOCK_INITIAL_DATA[currentTripId] || []);
-  }, [currentTripId]);
+  // 移除 reset expenses 的 useEffect，因為 expenses 現在從 props 接收
 
   // --- 計算各幣別總額 ---
   const totalTWD = expenses
@@ -82,7 +70,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTripId }) => {
       date: new Date().toISOString().split('T')[0]
     };
 
-    setExpenses([newExpense, ...expenses]);
+    onAddExpense(newExpense); // 調用從 App.tsx 傳遞下來的 onAddExpense
     setFormData({ item: '', amount: '', category: 'food', payer: 'Me' });
     setIsModalOpen(false);
   };

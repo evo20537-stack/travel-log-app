@@ -9,7 +9,7 @@ import {
   Cloud, CloudRain, Snowflake, Search, Upload, Image as ImageIcon,
   Camera, Move, Wallet, Sparkles, Map, ChevronRight, ExternalLink
 } from 'lucide-react';
-import { Trip, AppTab, ScheduleEvent, WeatherDay } from '../types';
+import { Trip, AppTab, ScheduleEvent, WeatherDay, Expense } from '../types';
 import { getWeatherForecast } from '../services/geminiService';
 
 interface DashboardProps {
@@ -27,12 +27,14 @@ interface DashboardProps {
   completedEventIds: Set<string>;
   onCompleteEvent: (id: string) => void;
   onUndoCompleteEvent: (id: string) => void;
+  expenses: Expense[]; // 新增 expenses 屬性
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ 
   trips, currentTripId, onTripChange, onAddTrip, onEditTrip, onDeleteTrip, 
   onNavigateTab, userName, userAvatar, onUpdateUserProfile, 
-  events, completedEventIds, onCompleteEvent, onUndoCompleteEvent
+  events, completedEventIds, onCompleteEvent, onUndoCompleteEvent,
+  expenses // 接收 expenses 屬性
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const tripFileRef = useRef<HTMLInputElement>(null);
@@ -60,6 +62,12 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [profileFormData, setProfileFormData] = useState({ name: userName, avatar: userAvatar });
 
   const currentTrip = trips.find(t => t.id === currentTripId) || trips[0];
+
+  // 計算總支出
+  const totalExpenses = (expenses ?? []).reduce((sum, expense) => sum + expense.amount, 0);
+  // 假設一個總預算上限，用於計算進度條百分比
+  const totalBudget = 20000; // 您可以根據實際需求調整這個值
+  const expensePercentage = Math.min(100, (totalExpenses / totalBudget) * 100);
 
   // 當選擇的行程改變時，自動抓取天氣
   useEffect(() => {
@@ -316,7 +324,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
       {/* 4. 快速工具 (位於天氣與行程之間) */}
       <div className="pt-2">
-        <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase mb-3 px-1">快速工具</h3>
+        <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase mb-3 px-1">財務摘要</h3>
         <div className="flex gap-3">
             <button 
                 onClick={() => onNavigateTab(AppTab.SCHEDULE)}
@@ -341,15 +349,14 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
         
         {nextUpEvent ? (
-          <Card className="relative overflow-hidden p-6 border-none bg-stone-900 text-white shadow-2xl">
-            <Sparkles className="absolute right-[-20px] top-[-20px] text-white/5" size={120} />
+          <Card className="relative overflow-hidden p-6 border-none bg-white text-stone-900 shadow-2xl">
             <div className="flex gap-5 relative z-10">
-              <div className="flex flex-col items-center justify-center bg-white/10 backdrop-blur-xl rounded-2xl w-16 h-16 border border-white/20 shrink-0 shadow-inner">
-                <span className="text-sm font-black text-white">{nextUpEvent.time}</span>
+              <div className="flex flex-col items-center justify-center bg-stone-50 rounded-2xl w-16 h-16 border border-stone-100 shrink-0 shadow-inner">
+                <span className="text-sm font-black text-stone-900">{nextUpEvent.time}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="text-xl font-black text-white truncate leading-tight tracking-tight">{nextUpEvent.title}</h4>
-                <div className="flex items-center gap-1.5 text-white/50 text-xs mt-1.5 font-bold">
+                <h4 className="text-xl font-black text-stone-900 truncate leading-tight tracking-tight">{nextUpEvent.title}</h4>
+                <div className="flex items-center gap-1.5 text-stone-400 text-xs mt-1.5 font-bold">
                   <MapPin size={14} className="text-orange-400" />
                   <span className="truncate">{nextUpEvent.location}</span>
                 </div>
@@ -359,14 +366,14 @@ const Dashboard: React.FC<DashboardProps> = ({
             <div className="mt-7 flex gap-3 relative z-10">
                 <Button 
                     size="md" 
-                    className="flex-1 bg-blue-600 text-white border-none shadow-xl shadow-blue-900/20 active:bg-blue-700" 
+                    className="flex-1 bg-orange-500 text-white border-none shadow-xl shadow-orange-200 active:bg-orange-600" 
                     onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(nextUpEvent.location)}`, '_blank')}
                 >
                     <Navigation size={18} fill="white" /> <span className="font-black">開始導航</span>
                 </Button>
                 <button 
                     onClick={() => onCompleteEvent(nextUpEvent.id)}
-                    className="px-6 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 font-bold text-xs transition-all uppercase tracking-widest"
+                    className="px-6 rounded-xl bg-stone-100 hover:bg-stone-200 border border-stone-200 font-bold text-xs transition-all uppercase tracking-widest text-stone-700"
                 >
                     完成
                 </button>
@@ -394,11 +401,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <ChevronRight size={14} className="text-stone-300" />
             </div>
             <div className="flex items-end gap-2">
-                <p className="text-2xl font-black text-stone-800">¥ 12,500</p>
+                <p className="text-2xl font-black text-stone-800">¥ {totalExpenses.toLocaleString()}</p>
                 <span className="text-[10px] font-bold text-stone-400 mb-1">/ 累計花費</span>
             </div>
             <div className="w-full h-1.5 bg-stone-100 rounded-full overflow-hidden mt-1">
-                <div className="h-full bg-blue-500 rounded-full" style={{ width: '65%' }} />
+                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${expensePercentage}%` }} />
             </div>
         </Card>
       </div>
