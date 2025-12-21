@@ -1,67 +1,68 @@
-
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { WeatherDay } from "../types";
 
-export interface WeatherForecastResult {
-  days: WeatherDay[];
-  sources: any[];
-}
+// 1. 初始化 Gemini (使用你的環境變數)
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
+const genAI = new GoogleGenerativeAI(API_KEY);
 
-export const getWeatherForecast = async (location: string): Promise<WeatherForecastResult> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
-  // 更新 Prompt 讓搜尋更專注於「即時」與「7天」
-  const prompt = `請搜尋「${location}」目前的氣溫以及未來 7 天（包含今日）的天氣預報。
-請嚴格遵守以下 JSON 結構回傳（不要回傳其他文字）：
-[
-  {"date": "MM/DD", "temp": 數字, "condition": "天氣狀態描述", "icon": "sunny" | "cloudy" | "rainy" | "snowy"}
-]
-注意：
-1. icon 欄位必須且只能從 [sunny, cloudy, rainy, snowy] 四個詞中選擇。
-2. 請搜尋當地的實際天氣預報資訊。`;
+export const getWeatherForecast = async (location: string): Promise<{ days: WeatherDay[], sources: string[] }> => {
+  // 如果沒有金鑰，回傳假資料避免崩潰 (本地開發防呆用)
+  if (!API_KEY) {
+    console.warn("⚠️ 未偵測到 API Key，使用模擬資料");
+    return mockData();
+  }
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              date: { type: Type.STRING },
-              temp: { type: Type.NUMBER },
-              condition: { type: Type.STRING },
-              icon: { type: Type.STRING },
-            },
-            required: ["date", "temp", "condition", "icon"],
-          }
-        }
+    console.log(`正在詢問 Gemini: ${location} 的天氣...`);
+    
+    // 2. 設定模型
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+    // 3. 建立 Prompt (提示詞)
+    const prompt = `
+      請給我 ${location} 未來 5 天的天氣預報。
+      請直接回傳一個純 JSON 字串，不要有 Markdown 格式 (```json ... ```)。
+      JSON 格式必須包含 days 陣列，每個物件要有:
+      - date: 字串 (例如 "今天", "明天", "週一")
+      - temp: 數字 (攝氏溫度)
+      - condition: 字串 (天氣狀況簡述，如 "晴時多雲")
+      - icon: 字串 (只能是以下四種之一: "sunny", "cloudy", "rainy", "snowy")
+      
+      範例格式:
+      {
+        "days": [
+          { "date": "今天", "temp": 24, "condition": "晴朗", "icon": "sunny" }
+        ],
+        "sources": ["Gemini AI"]
       }
-    });
+    `;
 
-    const jsonStr = response.text?.trim() || "[]";
-    const data = JSON.parse(jsonStr);
-    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    // 4. 發送請求
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
 
-    return { 
-      days: data as WeatherDay[], 
-      sources 
-    };
+    // 5. 清理與解析 JSON (Gemini 有時會多給 ```json，要清掉)
+    const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    const data = JSON.parse(cleanedText);
+
+    return data;
+
   } catch (error) {
-    console.error("Fetch weather error:", error);
-    return {
-      days: [
-        { date: '今日', temp: 22, condition: '連線錯誤', icon: 'cloudy' },
-      ],
-      sources: []
-    };
+    console.error("Gemini API 呼叫失敗:", error);
+    // 失敗時回退到假資料，保證 APP 不會壞掉
+    return mockData();
   }
 };
 
-export const sendChatMessage = async (currentMessage: string): Promise<string> => {
-  return "【系統訊息】AI 助理正在調整中。";
-};
-
+// 備用的假資料函數 (當 API 失敗或沒付錢時使用)
+const mockData = () => ({
+  days: [
+    { date: 'API錯誤', temp: 0, condition: '連線失敗', icon: 'cloudy' as const },
+    { date: '明天', temp: 22, condition: '多雲', icon: 'cloudy' as const },
+    { date: '後天', temp: 19, condition: '短暫雨', icon: 'rainy' as const },
+    { date: '週四', temp: 18, condition: '陰天', icon: 'cloudy' as const },
+    { date: '週五', temp: 25, condition: '晴朗', icon: 'sunny' as const },
+  ],
+  sources: ["System Mock Data"]
+});
