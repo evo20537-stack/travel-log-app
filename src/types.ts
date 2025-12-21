@@ -1,24 +1,17 @@
 export interface Trip {
   id: string;
   title: string;
-  status: string;
-  day: string;
-  image: string;
-  imageOffset?: number; // 0-100% for object-position
-  color: string;
-  dates: string;
   destination: string;
-}
-
-export interface WeatherDay {
-  date: string;
-  temp: number;
-  condition: string;
-  icon: 'sunny' | 'cloudy' | 'rainy' | 'snowy';
+  dates: string;
+  status: string;
+  image: string;
+  image_offset?: number;
+  color: string;
 }
 
 export interface ScheduleEvent {
   id: string;
+  trip_id?: string;
   date: string;
   time: string;
   title: string;
@@ -31,39 +24,37 @@ export interface ScheduleEvent {
   icon?: any;
 }
 
+// --- Expense 型別已升級 ---
 export interface Expense {
   id: string;
-  item: string;
+  trip_id?: string;
+  title: string;
   amount: number;
-  currency: 'TWD' | 'JPY' | 'USD';
-  payer: string;
-  category: 'food' | 'transport' | 'shopping' | 'stay';
-  date: string;
+  category: '交通' | '住宿' | '餐飲' | '購物' | '娛樂' | '其他';
+  date: string; 
+  notes?: string;
+  currency: 'TWD' | 'JPY'; // 新增幣別欄位
 }
 
+// --- Booking 型別已升級 ---
 export interface Booking {
   id: string;
-  type: 'flight' | 'hotel' | 'ticket';
+  trip_id?: string;
   title: string;
-  refNumber: string;
-  datetime: string;
-  location: string;
-  mapUrl?: string;
-  fileUrl?: string;
+  category: '機票' | '住宿' | '票券' | '其他'; // 更新分類
+  status: '已完成' | '待處理';
+  date: string;
+  confirmation_number?: string;
   notes?: string;
 }
 
-export type PlanningCategory = 'packing' | 'shops' | 'food' | 'shopping';
-
-export interface ShoppingItem {
+// --- ChecklistItem 型別已升級 ---
+export interface ChecklistItem {
   id: string;
-  name: string;
-  quantity: number;
-  image?: string;
-  checked: boolean;
-  category: PlanningCategory;
-  notes?: string;
-  link?: string;
+  trip_id?: string;
+  title: string;
+  is_completed: boolean;
+  category: '購物' | '餐廳' | '景點'; // 新增分類欄位
 }
 
 export interface ChatMessage {
@@ -80,4 +71,12 @@ export enum AppTab {
   BOOKINGS = 'bookings',
   EXPENSES = 'expenses',
   PLANNING = 'planning'
+}
+
+export interface WeatherDay {
+    date: string;
+    temp_max: number;
+    temp_min: number;
+    icon: string;
+    description: string;
 }

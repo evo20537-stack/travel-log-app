@@ -1,67 +1,132 @@
-import React, { useState, useEffect } from 'react';
-import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
+import React, { useState, useMemo } from 'react';
 import Modal from '../components/ui/Modal';
-import { Plane, Copy, Eye, EyeOff, QrCode, Ticket, BedDouble, MoreVertical, Plus, Edit2, Trash2, MapPin, AlignLeft } from 'lucide-react';
-import { Booking } from '../types';
+import Button from '../components/ui/Button';
+import { Trip, Booking } from '../types';
+import { v4 as uuidv4 } from 'uuid';
+import { format, parseISO } from 'date-fns';
+import { Plane, BedDouble, Ticket, MoreHorizontal, Plus, Edit2, Trash2, CheckCircle, Clock, Copy, CalendarPlus, Building, Train, Star } from 'lucide-react';
 
+// --- 全新的 Props 和分類定義 ---
 interface BookingsProps {
-  currentTripId: string;
+  currentTrip: Trip;
+  bookings: Booking[];
+  onUpdateBookings: (updatedBookings: Booking[]) => void;
 }
 
-const MOCK_BOOKINGS: Record<string, Booking[]> = {
-  '1': [ // Tokyo
-    { id: 'b1', type: 'flight', title: 'JL 098', refNumber: 'XJ9P2M', datetime: '2024.04.10 14:20', location: 'TSA -> HND' },
-    { id: 'b2', type: 'hotel', title: '淺草里士滿酒店', refNumber: 'HT-2921', datetime: 'Apr 10 - Apr 15', location: '東京都台東區淺草2-7-10', mapUrl: 'https://goo.gl/maps/example' }
-  ],
-  '2': [ // Kyoto
-    { id: 'b3', type: 'flight', title: 'CI 172', refNumber: 'KP8891', datetime: '2024.11.20 10:00', location: 'TPE -> KIX' },
-    { id: 'b4', type: 'ticket', title: '京都嵐山小火車', refNumber: 'TK-1122', datetime: 'Nov 21 13:00', location: '嵯峨野' }
-  ]
+type BookingCategory = '機票' | '住宿' | '票券' | '其他';
+const BOOKING_CATEGORIES: BookingCategory[] = ['機票', '住宿', '票券'];
+
+const CATEGORY_MAP: Record<BookingCategory, { icon: React.ElementType, color: string, verb: string }> = {
+  '機票': { icon: Plane, color: 'bg-sky-100 text-sky-600', verb: '航班' },
+  '住宿': { icon: Building, color: 'bg-indigo-100 text-indigo-600', verb: '住宿' },
+  '票券': { icon: Ticket, color: 'bg-amber-100 text-amber-600', verb: '票券' },
+  '其他': { icon: Star, color: 'bg-stone-100 text-stone-500', verb: '預訂' },
 };
 
-type BookingType = 'hotel' | 'flight' | 'ticket';
+// --- 全新的達人級功能：產生行事曆檔案 ---
+const generateICS = (booking: Booking) => {
+  const cal = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//YourAppName//NONSGML v1.0//EN',
+    'BEGIN:VEVENT',
+    `UID:${booking.id}@yourapp.com`,
+    `DTSTAMP:${format(new Date(), "yyyyMMdd'T'HHmmss'Z'")}`,
+    `DTSTART;VALUE=DATE:${format(parseISO(booking.date), 'yyyyMMdd')}`,
+    `SUMMARY:${booking.title}`,
+    `DESCRIPTION:預訂號碼: ${booking.confirmation_number || '無'}. 備註: ${booking.notes || '無'}`, 
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+  
+  const blob = new Blob([cal], { type: 'text/calendar' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${booking.title}.ics`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
 
-const Bookings: React.FC<BookingsProps> = ({ currentTripId }) => {
-  const [activeTab, setActiveTab] = useState<BookingType>('hotel');
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [showSensitive, setShowSensitive] = useState(false);
+// --- 全新的票券元件 ---
+const BookingTicket: React.FC<{ booking: Booking; onEdit: () => void; }> = ({ booking, onEdit }) => {
+  const config = CATEGORY_MAP[booking.category] || CATEGORY_MAP['其他'];
+  const Icon = config.icon;
+  const statusConfig = {
+      '已完成': { text: '已確認', color: 'bg-green-100 text-green-700', icon: <CheckCircle size={14}/> },
+      '待處理': { text: '待確認', color: 'bg-yellow-100 text-yellow-700', icon: <Clock size={14}/> }
+  }
 
-  // Modal & Form State
+  return (
+      <div onClick={onEdit} className="cursor-pointer group bg-white shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-2xl flex flex-col active:scale-[0.98]">
+          <div className="p-4 flex-1">
+              <div className="flex justify-between items-start gap-3">
+                  <div className={`shrink-0 w-12 h-12 rounded-lg ${config.color} flex items-center justify-center`}><Icon size={24} /></div>
+                  <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-bold ${config.color.replace('bg-', 'text-').replace('-100', '-600')} tracking-wider`}>{config.verb}</p>
+                      <h3 className="font-black text-stone-800 text-lg truncate">{booking.title}</h3>
+                  </div>
+                  <div className={`flex items-center gap-1.5 text-xs font-bold px-2 py-1 rounded-full ${statusConfig[booking.status].color}`}>
+                    {statusConfig[booking.status].icon} {statusConfig[booking.status].text}
+                  </div>
+              </div>
+              {(booking.notes || booking.date) && 
+                <div className="mt-3 text-sm space-y-2 text-stone-600">
+                    {booking.date && <p><span className="font-bold">日期:</span> {format(parseISO(booking.date), 'yyyy / MM / dd')}</p>}
+                    {booking.notes && <p className="whitespace-pre-wrap"><span className="font-bold">備註:</span> {booking.notes}</p>}
+                </div>
+              }
+          </div>
+          {/* 撕角 + 預訂碼區塊 */}
+          <div className="border-t-2 border-dashed border-stone-200 mt-2"></div>
+          <div className="flex justify-between items-center p-3 bg-stone-50 rounded-b-2xl">
+              <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold text-stone-400 uppercase">Confirmation No.</p>
+                  <div className="flex items-center gap-2">
+                      <p className="font-mono font-bold text-stone-700 text-sm truncate">{booking.confirmation_number || '-'}</p>
+                      {booking.confirmation_number && 
+                          <button 
+                              onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(booking.confirmation_number!); alert('預訂編號已複製！') }}
+                              className="p-1 text-stone-400 hover:text-orange-500 transition-colors"
+                          ><Copy size={14} /></button>}
+                  </div>
+              </div>
+              <button 
+                onClick={(e) => { e.stopPropagation(); generateICS(booking); }}
+                className="ml-3 shrink-0 flex items-center gap-2 text-xs font-bold text-indigo-500 bg-indigo-50 px-3 py-2 rounded-lg hover:bg-indigo-100 transition-colors"
+              >
+                  <CalendarPlus size={14} /> 新增至行事曆
+              </button>
+          </div>
+      </div>
+  )
+}
+
+// --- 主元件 ---
+const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBookings }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
-  const [formData, setFormData] = useState({
+  const [activeCategory, setActiveCategory] = useState<BookingCategory>('機票');
+
+  const [formData, setFormData] = useState<Omit<Booking, 'id' | 'trip_id'>>({
     title: '',
-    refNumber: '',
-    datetime: '',
-    location: '',
+    category: '機票',
+    status: '已完成',
+    date: new Date().toISOString().split('T')[0],
+    confirmation_number: '',
     notes: '',
-    mapUrl: '',
-    type: 'hotel' as BookingType
-  });
-
-  // Load Data
-  useEffect(() => {
-    setBookings(MOCK_BOOKINGS[currentTripId] || []);
-  }, [currentTripId]);
-
-  // Filter Bookings based on active tab
-  // Note: We group 'ticket' as 'Other' visually if needed, but here we map 1:1
-  const filteredBookings = bookings.filter(b => {
-    if (activeTab === 'ticket') return b.type === 'ticket'; // covers 'other'
-    return b.type === activeTab;
   });
 
   const handleOpenAdd = () => {
     setEditingBooking(null);
     setFormData({
       title: '',
-      refNumber: '',
-      datetime: '',
-      location: '',
+      category: activeCategory,
+      status: '已完成',
+      date: new Date().toISOString().split('T')[0],
+      confirmation_number: '',
       notes: '',
-      mapUrl: '',
-      type: activeTab // Default to current tab
     });
     setIsFormOpen(true);
   };
@@ -70,327 +135,124 @@ const Bookings: React.FC<BookingsProps> = ({ currentTripId }) => {
     setEditingBooking(booking);
     setFormData({
       title: booking.title,
-      refNumber: booking.refNumber,
-      datetime: booking.datetime,
-      location: booking.location,
+      category: booking.category,
+      status: booking.status,
+      date: booking.date.split('T')[0],
+      confirmation_number: booking.confirmation_number || '',
       notes: booking.notes || '',
-      mapUrl: booking.mapUrl || '',
-      type: booking.type
     });
     setIsFormOpen(true);
   };
 
-  const handleDelete = () => {
-    if (editingBooking && confirm('確定要刪除這張憑證嗎？')) {
-      setBookings(bookings.filter(b => b.id !== editingBooking.id));
+  const handleDelete = (id: string) => {
+    if (confirm('確定要刪除這項預訂嗎？')) {
+      onUpdateBookings(bookings.filter(b => b.id !== id));
       setIsFormOpen(false);
     }
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    const newBooking: Booking = {
-      id: editingBooking ? editingBooking.id : Date.now().toString(),
-      type: formData.type,
-      title: formData.title,
-      refNumber: formData.refNumber,
-      datetime: formData.datetime,
-      location: formData.location,
-      notes: formData.notes,
-      mapUrl: formData.mapUrl
+    if (!formData.title.trim()) return;
+
+    const newOrUpdatedBooking: Booking = {
+      id: editingBooking ? editingBooking.id : uuidv4(),
+      ...formData,
     };
 
-    if (editingBooking) {
-      setBookings(bookings.map(b => b.id === editingBooking.id ? newBooking : b));
-    } else {
-      setBookings([...bookings, newBooking]);
-    }
+    let updatedList = editingBooking 
+      ? bookings.map(b => b.id === editingBooking.id ? newOrUpdatedBooking : b)
+      : [...bookings, newOrUpdatedBooking];
+    
+    updatedList.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    onUpdateBookings(updatedList);
     setIsFormOpen(false);
   };
 
+  const filteredBookings = useMemo(() => 
+      bookings.filter(b => b.category === activeCategory).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()), 
+      [bookings, activeCategory]
+  );
+  
+  // --- 語法修正：將 Icon 元件賦值給大寫字母開頭的變數 ---
+  const EmptyStateIcon = CATEGORY_MAP[activeCategory].icon;
+
   return (
     <div className="pb-24 space-y-6 animate-fade-in">
-      <header className="flex justify-between items-center">
-        <h2 className="text-2xl font-black text-stone-800">預訂憑證 🎫</h2>
-        <button 
-          onClick={handleOpenAdd}
-          className="bg-stone-800 text-white p-2 rounded-xl active:scale-95 transition-transform"
-        >
-          <Plus size={20} />
-        </button>
+      <header className="sticky top-0 bg-[#F7F4EB]/80 backdrop-blur-md z-40 pt-2 pb-4 border-b border-stone-200/50">
+        <div className="flex justify-between items-end mb-4">
+          <div>
+              <span className="text-xs font-bold text-stone-500 truncate">{currentTrip.title}</span>
+              <h2 className="text-2xl font-black text-stone-800">預訂憑證 🎫</h2>
+          </div>
+          <Button onClick={handleOpenAdd} className="bg-stone-800 text-white rounded-xl shadow-lg shadow-stone-200 shrink-0"><Plus size={20} /></Button>
+        </div>
+        <div className="grid grid-cols-3 gap-2 bg-stone-200/70 p-1 rounded-xl">
+          {BOOKING_CATEGORIES.map(cat => (
+            <button 
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`py-2 px-3 text-sm font-black rounded-lg transition-all duration-300 ${activeCategory === cat ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-500'}`}>
+              {cat}
+            </button>
+          ))}
+        </div>
       </header>
 
-      {/* Tabs */}
-      <div className="flex p-1 bg-stone-200 rounded-xl">
-        {[
-          { id: 'hotel', label: '住宿', icon: BedDouble },
-          { id: 'flight', label: '機票', icon: Plane },
-          { id: 'ticket', label: '其他', icon: Ticket },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as BookingType)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-bold transition-all ${
-              activeTab === tab.id 
-                ? 'bg-white text-stone-800 shadow-sm' 
-                : 'text-stone-500 hover:text-stone-600'
-            }`}
-          >
-            <tab.icon size={16} />
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Toggle Privacy */}
-      <div className="flex justify-end">
-        <button 
-          onClick={() => setShowSensitive(!showSensitive)}
-          className="text-xs font-bold text-stone-500 flex items-center gap-1 bg-white px-3 py-1.5 rounded-full border border-stone-200"
-        >
-          {showSensitive ? <EyeOff size={14}/> : <Eye size={14}/>}
-          {showSensitive ? '隱藏資訊' : '顯示資訊'}
-        </button>
-      </div>
-
-      {/* List */}
       <div className="space-y-4">
         {filteredBookings.length === 0 ? (
-          <div className="text-center py-12 opacity-50">
-            <Ticket size={48} className="mx-auto mb-2 text-stone-300" />
-            <p className="font-bold text-stone-500">此分類暫無憑證</p>
-            <Button variant="ghost" className="mt-2 text-orange-500" onClick={handleOpenAdd}>
-              + 立即新增
-            </Button>
+          <div className="text-center py-16 opacity-60">
+            <div className={`mx-auto w-16 h-16 rounded-2xl flex items-center justify-center mb-4 ${CATEGORY_MAP[activeCategory].color}`}>
+              <EmptyStateIcon size={32} />
+            </div>
+            <p className="font-bold text-stone-600 text-lg">尚無{activeCategory}預訂</p>
+            <p className="text-sm text-stone-400 mt-1">點擊右上角新增一筆吧！</p>
           </div>
         ) : (
           filteredBookings.map(booking => (
-            booking.type === 'flight' ? (
-               /* FLIGHT CARD */
-               <Card key={booking.id} className="relative overflow-hidden border-none group" noPadding>
-                  <div className="bg-orange-500 p-4 text-white relative">
-                    <div className="flex justify-between items-start z-10 relative">
-                      <div>
-                        <p className="text-xs font-bold opacity-80">FLIGHT TICKET</p>
-                        <h3 className="text-2xl font-black mt-1">{booking.title}</h3>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => handleOpenEdit(booking)} className="p-1.5 bg-white/20 rounded-lg hover:bg-white/30 backdrop-blur-sm">
-                          <Edit2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                    <Plane className="absolute right-4 top-4 opacity-20 rotate-45" size={80} />
-                  </div>
-                  <div className="bg-white p-5 border-x border-b border-stone-200 rounded-b-2xl relative">
-                    <div className="absolute top-0 left-0 right-0 h-4 -mt-2 bg-white rounded-b-xl border-b-2 border-dashed border-stone-300"></div>
-                    
-                    <div className="flex justify-between items-center mt-2 mb-6">
-                      <div className="text-center min-w-[60px]">
-                        <div className="text-xl font-black text-stone-800">{booking.location.split('->')[0]?.trim() || 'DEP'}</div>
-                      </div>
-                      <div className="flex-1 flex flex-col items-center px-2">
-                         <Plane size={14} className="text-stone-300 rotate-90 mb-1" />
-                         <div className="w-full border-b-2 border-dashed border-stone-200"></div>
-                      </div>
-                      <div className="text-center min-w-[60px]">
-                        <div className="text-xl font-black text-stone-800">{booking.location.split('->')[1]?.trim() || 'ARR'}</div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                      <div>
-                        <p className="text-xs text-stone-400 font-bold mb-1">DATE</p>
-                        <p className="font-bold text-stone-700">{booking.datetime}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-stone-400 font-bold mb-1">REF</p>
-                        <div className="flex items-center gap-2">
-                          <p className={`font-bold ${showSensitive ? 'text-stone-700' : 'text-stone-300 blur-sm'}`}>
-                            {booking.refNumber}
-                          </p>
-                          <button className="text-stone-400 active:text-orange-500">
-                            <Copy size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-               </Card>
-            ) : (
-              /* HOTEL & OTHER CARD */
-              <Card key={booking.id} className="group relative">
-                <div className="flex gap-4">
-                  <div className={`w-14 h-14 rounded-xl flex items-center justify-center shrink-0 ${
-                    booking.type === 'hotel' ? 'bg-indigo-100 text-indigo-500' : 'bg-green-100 text-green-500'
-                  }`}>
-                     {booking.type === 'hotel' ? <BedDouble size={24} /> : <Ticket size={24} />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-stone-800 text-lg truncate">{booking.title}</h4>
-                    <div className="flex items-center gap-1 text-xs text-stone-400 font-bold mt-1">
-                       <MapPin size={12} />
-                       <span className="truncate">{booking.location}</span>
-                    </div>
-                    
-                    <div className="mt-3 flex items-center gap-4 bg-stone-50 p-2 rounded-lg">
-                       <div className="flex-1">
-                          <p className="text-[10px] text-stone-400 font-bold">預訂編號</p>
-                          <p className={`font-bold text-sm ${showSensitive ? 'text-stone-700' : 'text-stone-300 blur-sm'}`}>
-                            {booking.refNumber}
-                          </p>
-                       </div>
-                       <div className="flex-1 border-l border-stone-200 pl-4">
-                          <p className="text-[10px] text-stone-400 font-bold">日期</p>
-                          <p className="font-bold text-sm text-stone-700">{booking.datetime}</p>
-                       </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Edit Button overlay */}
-                <div className="absolute top-4 right-4 flex gap-2">
-                   <button 
-                     onClick={() => handleOpenEdit(booking)} 
-                     className="text-stone-300 hover:text-blue-500 p-1 rounded-md hover:bg-stone-100"
-                   >
-                     <Edit2 size={16} />
-                   </button>
-                </div>
-
-                {/* Links */}
-                {(booking.mapUrl || booking.notes) && (
-                   <div className="mt-3 pt-3 border-t border-dashed border-stone-200 flex gap-3">
-                      {booking.mapUrl && (
-                        <a 
-                          href={booking.mapUrl} 
-                          target="_blank" 
-                          rel="noreferrer"
-                          className="text-xs font-bold text-orange-500 flex items-center gap-1 hover:underline"
-                        >
-                          <MapPin size={14} /> 開啟地圖
-                        </a>
-                      )}
-                      {booking.notes && (
-                         <span className="text-xs text-stone-400 flex items-center gap-1">
-                           <AlignLeft size={14} /> 有備註
-                         </span>
-                      )}
-                   </div>
-                )}
-              </Card>
-            )
+              <BookingTicket key={booking.id} booking={booking} onEdit={() => handleOpenEdit(booking)} />
           ))
         )}
       </div>
 
-      {/* EDIT MODAL */}
-      <Modal 
-        isOpen={isFormOpen} 
-        onClose={() => setIsFormOpen(false)} 
-        title={editingBooking ? "編輯憑證" : "新增憑證"}
-      >
+      <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title={editingBooking ? `編輯${formData.category}` : `新增${formData.category}`}>
         <form onSubmit={handleSave} className="space-y-4">
-           {/* Type Selector in Form */}
-           <div className="flex gap-2 mb-2">
-             {['hotel', 'flight', 'ticket'].map(type => (
-               <button
-                 key={type}
-                 type="button"
-                 onClick={() => setFormData({...formData, type: type as BookingType})}
-                 className={`flex-1 py-2 text-xs font-bold rounded-lg border-2 ${
-                   formData.type === type 
-                     ? 'border-orange-400 bg-orange-50 text-orange-600' 
-                     : 'border-stone-100 text-stone-400'
-                 }`}
-               >
-                 {type === 'hotel' ? '住宿' : type === 'flight' ? '機票' : '其他'}
-               </button>
-             ))}
+          <div>
+              <label className="block text-xs font-bold text-stone-600 mb-1">標題</label>
+              <input required placeholder={`例如: ${formData.category === '機票' ? '中華航空 CI130' : formData.category === '住宿' ? 'Cross Hotel Sapporo' : '札幌電視塔門票'}`} className="w-full p-3 rounded-xl border-2 border-stone-200 font-bold text-stone-800" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
            </div>
-
-           <div>
-              <label className="block text-xs font-bold text-stone-400 mb-1">名稱 / 航班號</label>
-              <input 
-                required
-                placeholder={formData.type === 'flight' ? '例如: JL 801' : '例如: APA Hotel'}
-                className="w-full px-4 py-3 rounded-xl border-2 border-stone-100 font-bold text-stone-700 focus:border-orange-400 focus:outline-none"
-                value={formData.title}
-                onChange={e => setFormData({...formData, title: e.target.value})}
-              />
-           </div>
-
-           <div className="flex gap-3">
-             <div className="flex-1">
-                <label className="block text-xs font-bold text-stone-400 mb-1">預訂編號</label>
-                <input 
-                  required
-                  className="w-full px-4 py-3 rounded-xl border-2 border-stone-100 font-bold text-stone-700 focus:border-orange-400 focus:outline-none"
-                  value={formData.refNumber}
-                  onChange={e => setFormData({...formData, refNumber: e.target.value})}
-                />
+           <div className="grid grid-cols-2 gap-4">
+             <div>
+                <label className="block text-xs font-bold text-stone-600 mb-1">類別</label>
+                <select className="w-full p-3 rounded-xl border-2 border-stone-200 bg-white font-bold" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value as BookingCategory})}>
+                    {BOOKING_CATEGORIES.map(cat => <option key={cat}>{cat}</option>)}
+                    <option>其他</option>
+                </select>
              </div>
-             <div className="flex-1">
-                <label className="block text-xs font-bold text-stone-400 mb-1">日期 / 時間</label>
-                <input 
-                  required
-                  placeholder="2024.12.31"
-                  className="w-full px-4 py-3 rounded-xl border-2 border-stone-100 font-bold text-stone-700 focus:border-orange-400 focus:outline-none"
-                  value={formData.datetime}
-                  onChange={e => setFormData({...formData, datetime: e.target.value})}
-                />
-             </div>
+             <div>
+                <label className="block text-xs font-bold text-stone-600 mb-1">狀態</label>
+                 <select className="w-full p-3 rounded-xl border-2 border-stone-200 bg-white font-bold" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as '已完成' | '待處理'})}>
+                    <option>已完成</option>
+                    <option>待處理</option>
+                </select>
+            </div>
            </div>
-
            <div>
-              <label className="block text-xs font-bold text-stone-400 mb-1">地點 / 航線</label>
-              <div className="relative">
-                 <MapPin size={16} className="absolute left-3 top-3.5 text-stone-400" />
-                 <input 
-                   placeholder={formData.type === 'flight' ? 'TPE -> NRT' : '地址...'}
-                   className="w-full pl-9 pr-4 py-3 rounded-xl border-2 border-stone-100 font-bold text-stone-700 focus:border-orange-400 focus:outline-none"
-                   value={formData.location}
-                   onChange={e => setFormData({...formData, location: e.target.value})}
-                 />
-              </div>
+                <label className="block text-xs font-bold text-stone-600 mb-1">日期</label>
+                <input type="date" required className="w-full p-3 rounded-xl border-2 border-stone-200 bg-white font-bold" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})}/>
            </div>
-
-           {formData.type !== 'flight' && (
-              <div>
-                <label className="block text-xs font-bold text-stone-400 mb-1">地圖連結 (選填)</label>
-                <input 
-                  placeholder="https://maps.app.goo.gl/..."
-                  className="w-full px-4 py-3 rounded-xl border-2 border-stone-100 font-bold text-stone-700 focus:border-orange-400 focus:outline-none text-xs"
-                  value={formData.mapUrl}
-                  onChange={e => setFormData({...formData, mapUrl: e.target.value})}
-                />
-              </div>
-           )}
-
            <div>
-              <label className="block text-xs font-bold text-stone-400 mb-1">備註</label>
-              <textarea 
-                rows={2}
-                className="w-full px-4 py-3 rounded-xl border-2 border-stone-100 font-bold text-stone-700 focus:border-orange-400 focus:outline-none resize-none"
-                value={formData.notes}
-                onChange={e => setFormData({...formData, notes: e.target.value})}
-              />
+              <label className="block text-xs font-bold text-stone-600 mb-1">預訂編號 (選填)</label>
+              <input className="w-full p-3 rounded-xl border-2 border-stone-200 font-mono" value={formData.confirmation_number} onChange={e => setFormData({...formData, confirmation_number: e.target.value})} />
            </div>
-
+           <div>
+              <label className="block text-xs font-bold text-stone-600 mb-1">備註 (選填)</label>
+              <textarea rows={3} className="w-full p-3 rounded-xl border-2 border-stone-200 resize-none" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
+           </div>
            <div className="flex gap-3 pt-2">
-            {editingBooking && (
-              <Button 
-                type="button" 
-                variant="ghost" 
-                className="w-12 text-stone-400 hover:text-red-500 hover:bg-red-50 px-0"
-                onClick={handleDelete}
-              >
-                <Trash2 size={20} />
-              </Button>
-            )}
-            <Button type="submit" className="flex-1">
-              {editingBooking ? "儲存修改" : "新增憑證"}
-            </Button>
+            {editingBooking && <Button type="button" variant="danger" onClick={() => handleDelete(editingBooking.id)} className="mr-auto"><Trash2 size={16} /></Button>}
+            <Button variant="secondary" type="button" onClick={() => setIsFormOpen(false)}>取消</Button>
+            <Button type="submit" className="bg-stone-800 text-white">儲存</Button>
           </div>
         </form>
       </Modal>

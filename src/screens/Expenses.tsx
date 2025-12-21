@@ -1,217 +1,187 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { Plus, TrendingUp, DollarSign, Utensils, Train, ShoppingBag, BedDouble, Coffee, Ticket, Wallet, ArrowRightLeft } from 'lucide-react';
-import { Expense } from '../types';
+import { Plus, Wallet, Trash2, Utensils, Train, ShoppingBag, BedDouble, Clapperboard, MoreHorizontal } from 'lucide-react';
+import { Trip, Expense } from '../types';
+import { v4 as uuidv4 } from 'uuid';
+import { format } from 'date-fns';
 
 interface ExpensesProps {
-  currentTripId: string;
-  expenses: Expense[]; // 從 App.tsx 接收 expenses
-  onAddExpense: (expense: Expense) => void; // 從 App.tsx 接收新增支出的函數
+  currentTrip: Trip;
+  expenses: Expense[];
+  onUpdateExpenses: (updatedExpenses: Expense[]) => void;
 }
 
-// 匯率常數 (僅用於計算比例圖的權重，不顯示換算金額)
-const JPY_RATE_WEIGHT = 0.215;
-
-// 將 MOCK_INITIAL_DATA 移至 App.tsx 管理，此處不再需要
-
-// 優化配色配置，確保對比度
-const CATEGORIES = [
-  { id: 'food', label: '餐飲', icon: Utensils, color: 'bg-orange-100 text-orange-600', activeBorder: 'border-orange-500', barColor: 'bg-orange-500' },
-  { id: 'transport', label: '交通', icon: Train, color: 'bg-blue-100 text-blue-600', activeBorder: 'border-blue-500', barColor: 'bg-blue-500' },
-  { id: 'shopping', label: '購物', icon: ShoppingBag, color: 'bg-pink-100 text-pink-600', activeBorder: 'border-pink-500', barColor: 'bg-pink-500' },
-  { id: 'stay', label: '住宿', icon: BedDouble, color: 'bg-indigo-100 text-indigo-600', activeBorder: 'border-indigo-500', barColor: 'bg-indigo-500' },
-  { id: 'ticket', label: '門票', icon: Ticket, color: 'bg-green-100 text-green-600', activeBorder: 'border-green-500', barColor: 'bg-green-500' },
-  { id: 'other', label: '其他', icon: Coffee, color: 'bg-stone-200 text-stone-600', activeBorder: 'border-stone-500', barColor: 'bg-stone-500' },
+const CATEGORIES: { id: Expense['category'], label: string, icon: React.ElementType, color: string, darkColor: string }[] = [
+  { id: '餐飲', label: '餐飲', icon: Utensils, color: 'bg-orange-100', darkColor: 'bg-orange-500' },
+  { id: '交通', label: '交通', icon: Train, color: 'bg-blue-100', darkColor: 'bg-blue-500' },
+  { id: '住宿', label: '住宿', icon: BedDouble, color: 'bg-indigo-100', darkColor: 'bg-indigo-500' },
+  { id: '購物', label: '購物', icon: ShoppingBag, color: 'bg-pink-100', darkColor: 'bg-pink-500' },
+  { id: '娛樂', label: '娛樂', icon: Clapperboard, color: 'bg-green-100', darkColor: 'bg-green-500' },
+  { id: '其他', label: '其他', icon: MoreHorizontal, color: 'bg-stone-100', darkColor: 'bg-stone-500' },
 ];
 
-const Expenses: React.FC<ExpensesProps> = ({ currentTripId, expenses, onAddExpense }) => {
-  // 移除 Expenses 內部管理 expenses 狀態的邏輯，現在從 props 接收
-  
-  // Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [inputCurrency, setInputCurrency] = useState<'TWD' | 'JPY'>('JPY');
-  
-  // Form State
-  const [formData, setFormData] = useState({
-    item: '',
-    amount: '',
-    category: 'food',
-    payer: 'Me'
+const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpenses }) => {
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [exchangeRate, setExchangeRate] = useState<number>(0.22); // 預設匯率
+
+  const [formData, setFormData] = useState<Omit<Expense, 'id' | 'trip_id'>>({
+    title: '',
+    amount: 0,
+    category: '餐飲',
+    date: new Date().toISOString().split('T')[0],
+    notes: '',
+    currency: 'JPY',
   });
 
-  // 移除 reset expenses 的 useEffect，因為 expenses 現在從 props 接收
-
-  // --- 計算各幣別總額 ---
-  const totalTWD = expenses
-    .filter(e => e.currency === 'TWD')
-    .reduce((sum, item) => sum + item.amount, 0);
-
-  const totalJPY = expenses
-    .filter(e => e.currency === 'JPY')
-    .reduce((sum, item) => sum + item.amount, 0);
-
-  // --- 計算比例用 (內部權重換算) ---
-  const totalWeightValue = totalTWD + (totalJPY * JPY_RATE_WEIGHT);
-
-  const handleAddExpense = (e: React.FormEvent) => {
-    e.preventDefault();
-    const amountVal = parseFloat(formData.amount);
-    if (!amountVal) return;
-
-    const newExpense: Expense = {
-      id: Date.now().toString(),
-      item: formData.item || '未命名項目',
-      amount: amountVal,
-      currency: inputCurrency,
-      payer: formData.payer,
-      category: formData.category as any,
-      date: new Date().toISOString().split('T')[0]
+  useEffect(() => {
+    // --- 達人級優化：自動獲取即時匯率 ---
+    const fetchRate = async () => {
+      try {
+        const response = await fetch('https://open.er-api.com/v6/latest/JPY');
+        const data = await response.json();
+        if (data.rates && data.rates.TWD) {
+          setExchangeRate(data.rates.TWD);
+        }
+      } catch (error) {
+        console.error("無法獲取匯率，將使用預設值", error);
+      }
     };
+    fetchRate();
+  }, []);
 
-    onAddExpense(newExpense); // 調用從 App.tsx 傳遞下來的 onAddExpense
-    setFormData({ item: '', amount: '', category: 'food', payer: 'Me' });
-    setIsModalOpen(false);
+  const { totalTWD, totalJPY, categoryTotalsInTWD } = useMemo(() => {
+    let twd = 0;
+    let jpy = 0;
+    const catTotals: { [key: string]: number } = {};
+
+    for (const exp of expenses) {
+      const amountInTWD = exp.currency === 'JPY' ? exp.amount * exchangeRate : exp.amount;
+      catTotals[exp.category] = (catTotals[exp.category] || 0) + amountInTWD;
+      
+      if (exp.currency === 'TWD') twd += exp.amount;
+      else jpy += exp.amount;
+    }
+    return { totalTWD: twd, totalJPY: jpy, categoryTotalsInTWD: catTotals };
+  }, [expenses, exchangeRate]);
+
+  const totalCombinedInTWD = totalTWD + totalJPY * exchangeRate;
+
+  const handleOpenAdd = () => {
+    setEditingExpense(null);
+    setFormData({ title: '', amount: 0, category: '餐飲', date: new Date().toISOString().split('T')[0], currency: 'JPY', notes: '' });
+    setIsFormOpen(true);
   };
 
-  const getCategoryConfig = (catId: string) => CATEGORIES.find(c => c.id === catId) || CATEGORIES[5];
+  const handleOpenEdit = (expense: Expense) => {
+    setEditingExpense(expense);
+    setFormData({ ...expense, notes: expense.notes || '' });
+    setIsFormOpen(true);
+  };
+
+  const handleDelete = (id: string) => {
+    if (confirm('確定要刪除這筆開銷嗎？')) {
+      onUpdateExpenses(expenses.filter(e => e.id !== id));
+      setIsFormOpen(false);
+    }
+  };
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.title.trim() || !formData.amount) return;
+    const newOrUpdatedExpense: Expense = {
+      id: editingExpense ? editingExpense.id : uuidv4(),
+      ...formData,
+      amount: Number(formData.amount) || 0,
+    };
+    let updatedList = editingExpense
+      ? expenses.map(ex => ex.id === editingExpense.id ? newOrUpdatedExpense : ex)
+      : [...expenses, newOrUpdatedExpense];
+    updatedList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    onUpdateExpenses(updatedList);
+    setIsFormOpen(false);
+  };
+
+  const getCategoryConfig = (catId: Expense['category']) => CATEGORIES.find(c => c.id === catId) || CATEGORIES[5];
 
   return (
     <div className="pb-24 space-y-6 animate-fade-in">
-      {/* Header with Top Add Button */}
-      <header className="flex justify-between items-end">
-        <div>
-           <h2 className="text-2xl font-black text-stone-800">記帳本 💰</h2>
-           <p className="text-xs text-stone-400 font-bold mt-1">支出紀錄與統計</p>
+       <header className="sticky top-0 bg-[#F7F4EB]/80 backdrop-blur-md z-40 pt-2 pb-4 border-b border-stone-200/50">
+         <div className="flex justify-between items-end mb-4">
+          <div>
+              <span className="text-xs font-bold text-stone-500 truncate">{currentTrip.title}</span>
+              <h2 className="text-2xl font-black text-stone-800">旅費總管 💰</h2>
+          </div>
+          <Button onClick={handleOpenAdd} className="bg-stone-800 text-white rounded-xl shadow-lg shadow-stone-200 shrink-0"><Plus size={20} /></Button>
         </div>
-        <Button 
-          onClick={() => setIsModalOpen(true)} 
-          size="sm" 
-          className="bg-stone-800 text-white shadow-lg shadow-stone-200 active:scale-95 px-4"
-        >
-          <Plus size={18} strokeWidth={3} className="mr-1" /> 記一筆
-        </Button>
       </header>
 
-      {/* Stats Card - Split Currencies */}
-      <Card className="bg-[#2C2C2C] text-white border-none shadow-xl shadow-stone-300 overflow-hidden relative">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-10 -mt-10 blur-2xl pointer-events-none"></div>
-        
-        <div className="flex flex-col gap-5 mb-5 relative z-10">
-          <div className="flex items-center gap-2 mb-1 opacity-60">
-            <TrendingUp size={16} className="text-orange-400" />
-            <span className="text-xs font-bold tracking-wider uppercase">Total Expenses</span>
+      {/* --- 全新的雙幣總覽卡 --- */}
+      <Card className="bg-gradient-to-br from-stone-800 to-stone-900 text-white shadow-2xl shadow-stone-200">
+        <div className="grid grid-cols-2 gap-4 divide-x divide-white/20">
+          <div className="pr-4">
+             <p className="text-sm font-bold text-white/60">日幣總支出 (JPY)</p>
+             <p className="text-3xl font-black tracking-tight"><span className="font-normal">¥</span>{Math.round(totalJPY).toLocaleString()}</p>
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-             {/* 台幣區塊 */}
-             <div className="bg-[#3D3D3D] rounded-2xl p-4 border border-white/5 shadow-inner">
-                <div className="flex items-center gap-2 mb-3">
-                   <div className="w-5 h-5 rounded-full bg-[#4A4A4A] flex items-center justify-center text-[10px] font-bold text-stone-300">$</div>
-                   <span className="text-xs text-stone-400 font-bold">台幣 TWD</span>
-                </div>
-                <div className="text-2xl font-black tracking-tight text-white truncate">
-                   {totalTWD.toLocaleString()}
-                </div>
-             </div>
-
-             {/* 日幣區塊 */}
-             <div className="bg-[#3D3D3D] rounded-2xl p-4 border border-white/5 shadow-inner">
-                <div className="flex items-center gap-2 mb-3">
-                   <div className="w-5 h-5 rounded-full bg-orange-500/20 flex items-center justify-center text-[10px] font-bold text-orange-400">¥</div>
-                   <span className="text-xs text-stone-400 font-bold">日幣 JPY</span>
-                </div>
-                <div className="text-2xl font-black tracking-tight text-orange-100 truncate">
-                   {totalJPY.toLocaleString()}
-                </div>
-             </div>
+          <div className="pl-4">
+             <p className="text-sm font-bold text-white/60">台幣總支出 (TWD)</p>
+             <p className="text-3xl font-black tracking-tight"><span className="font-normal">$</span>{Math.round(totalTWD).toLocaleString()}</p>
           </div>
         </div>
         
-        {/* Proportions Bar */}
-        {totalWeightValue > 0 && (
-          <div className="pt-4 border-t border-white/10 relative z-10">
-            <div className="flex h-3 w-full bg-[#1A1A1A] rounded-full overflow-hidden mb-3">
+        {totalCombinedInTWD > 0 && (
+            <div className="mt-6 pt-4 border-t border-white/20">
+              <p className="text-center text-xs text-white/60 font-bold mb-2">消費種類分佈 (已換算為台幣)</p>
+              <div className="flex h-3 w-full bg-black/20 rounded-full overflow-hidden mb-3">
               {CATEGORIES.map(cat => {
-                  const catTWD = expenses.filter(e => e.category === cat.id && e.currency === 'TWD').reduce((sum, e) => sum + e.amount, 0);
-                  const catJPY = expenses.filter(e => e.category === cat.id && e.currency === 'JPY').reduce((sum, e) => sum + e.amount, 0);
-                  const catWeight = catTWD + (catJPY * JPY_RATE_WEIGHT);
-                  const percent = (catWeight / totalWeightValue) * 100;
-                  
+                  const percent = (categoryTotalsInTWD[cat.id] || 0) / totalCombinedInTWD * 100;
                   if (percent === 0) return null;
-
-                  return (
-                      <div 
-                        key={cat.id} 
-                        className={`h-full ${cat.barColor}`} 
-                        style={{ width: `${percent}%` }} 
-                      />
-                  );
+                  return <div key={cat.id} className={cat.darkColor} style={{ width: `${percent}%` }} />
               })}
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                  {Object.entries(categoryTotalsInTWD).sort(([,a],[,b]) => b-a).map(([catId, amount]) => (
+                      <div key={catId} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                              <div className={`w-2 h-2 rounded-full ${getCategoryConfig(catId as any).darkColor}`}></div>
+                              <span className="font-bold text-stone-300">{catId}</span>
+                          </div>
+                          <span className="font-mono font-bold text-stone-400">${Math.round(amount).toLocaleString()}</span>
+                      </div>
+                  ))}
+              </div>
             </div>
-            
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
-              {CATEGORIES.map(cat => {
-                const catTWD = expenses.filter(e => e.category === cat.id && e.currency === 'TWD').reduce((sum, e) => sum + e.amount, 0);
-                const catJPY = expenses.filter(e => e.category === cat.id && e.currency === 'JPY').reduce((sum, e) => sum + e.amount, 0);
-                const catWeight = catTWD + (catJPY * JPY_RATE_WEIGHT);
-                
-                // 計算並四捨五入百分比
-                const percent = totalWeightValue > 0 ? (catWeight / totalWeightValue) * 100 : 0;
-
-                if (Math.round(percent) === 0) return null;
-
-                return (
-                    <div key={cat.id} className="flex items-center gap-1.5">
-                      <div className={`w-2 h-2 rounded-full ${cat.barColor}`}></div>
-                      <span className="text-[10px] text-stone-300 font-bold">
-                        {cat.label} <span className="text-stone-500 ml-0.5">{Math.round(percent)}%</span>
-                      </span>
-                    </div>
-                )
-              })}
-            </div>
-          </div>
         )}
       </Card>
 
-      {/* Expense List */}
       <div className="space-y-3">
-        <h3 className="font-bold text-stone-600 text-sm flex justify-between items-end px-1">
-           <span>最近紀錄</span>
-           <span className="text-xs font-bold text-stone-400 bg-white border border-stone-200 px-2 py-0.5 rounded-full">{expenses.length} 筆</span>
-        </h3>
-        
+        <h3 className="font-bold text-stone-600 text-sm px-1">帳目明細 ({expenses.length})</h3>
         {expenses.length === 0 ? (
-          <div className="text-center py-10 opacity-60">
-             <div className="w-16 h-16 bg-stone-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <DollarSign className="text-stone-300" size={32} />
-             </div>
-             <p className="text-stone-400 font-bold text-sm">還沒有記帳紀錄</p>
+          <div className="text-center py-16 opacity-60">
+            <Wallet size={48} className="mx-auto mb-3 text-stone-300" />
+            <p className="font-bold text-stone-500">尚無任何開銷</p>
+             <p className="text-sm text-stone-400 mt-1">點擊右上角記第一筆帳吧！</p>
           </div>
         ) : (
           expenses.map((exp) => {
             const config = getCategoryConfig(exp.category);
+            const isJPY = exp.currency === 'JPY';
+            const convertedAmount = isJPY ? exp.amount * exchangeRate : exp.amount / exchangeRate;
             return (
-              <Card key={exp.id} className="flex justify-between items-center py-3 active:scale-[0.99] transition-transform" noPadding>
-                <div className="flex items-center gap-3 p-3 flex-1 min-w-0">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${config.color}`}>
-                    <config.icon size={22} strokeWidth={2.5} />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="font-bold text-stone-800 text-sm truncate">{exp.item}</h4>
-                    <p className="text-[10px] text-stone-400 font-bold mt-1 flex items-center gap-1">
-                      <span className="bg-stone-100 px-1.5 py-0.5 rounded text-stone-500">{config.label}</span>
-                      <span>• {exp.date.slice(5).replace('-','/')}</span>
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right p-4 flex flex-col justify-center min-w-[100px]">
-                  <p className={`font-black text-lg ${exp.currency === 'JPY' ? 'text-stone-800' : 'text-stone-600'}`}>
-                    <span className="text-xs font-bold mr-1 align-top mt-1 inline-block text-stone-400">{exp.currency === 'JPY' ? '¥' : 'NT$'}</span>
-                    {exp.amount.toLocaleString()}
-                  </p>
+              <Card key={exp.id} className="p-0 group relative overflow-hidden" onClick={() => handleOpenEdit(exp)}>
+                <div className="flex items-center">
+                    <div className={`w-3 h-full absolute left-0 top-0 ${config.color.replace('bg-', 'border-r-4 border-').replace('-100', '-400')}`}></div>
+                    <div className={`w-12 h-12 flex items-center justify-center rounded-lg ${config.color} text-lg ml-6`}><config.icon size={20}/></div>
+                    <div className="flex-1 px-4 min-w-0">
+                        <h4 className="font-bold text-stone-800 truncate">{exp.title}</h4>
+                        <p className="text-xs text-stone-400 font-bold mt-1">{format(new Date(exp.date), 'yyyy-MM-dd')}</p>
+                    </div>
+                    <div className="text-right pl-4 pr-4">
+                        <p className={`font-black text-lg ${isJPY ? 'text-sky-600' : 'text-emerald-600'}`}>{isJPY ? '¥' : '$'}{exp.amount.toLocaleString()}</p>
+                        <p className="text-xs text-stone-400 font-mono">≈ {isJPY ? '$' : '¥'}{Math.round(convertedAmount).toLocaleString()}</p>
+                    </div>
                 </div>
               </Card>
             );
@@ -219,97 +189,43 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTripId, expenses, onAddExpen
         )}
       </div>
 
-      {/* ADD EXPENSE MODAL */}
-      <Modal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        title="新增支出"
-      >
-         <form onSubmit={handleAddExpense} className="space-y-6">
-            
-            {/* Currency Toggle (Segmented Control) */}
-            <div className="bg-stone-100 p-1.5 rounded-xl flex relative">
-               <button
-                 type="button"
-                 onClick={() => setInputCurrency('JPY')}
-                 className={`flex-1 py-2.5 rounded-lg text-sm font-black flex items-center justify-center gap-1.5 transition-all relative z-10 ${
-                   inputCurrency === 'JPY' ? 'bg-white text-stone-800 shadow-sm ring-1 ring-black/5' : 'text-stone-400 hover:text-stone-500'
-                 }`}
-               >
-                 ¥ 日幣
-               </button>
-               <button
-                 type="button"
-                 onClick={() => setInputCurrency('TWD')}
-                 className={`flex-1 py-2.5 rounded-lg text-sm font-black flex items-center justify-center gap-1.5 transition-all relative z-10 ${
-                   inputCurrency === 'TWD' ? 'bg-white text-stone-800 shadow-sm ring-1 ring-black/5' : 'text-stone-400 hover:text-stone-500'
-                 }`}
-               >
-                 $ 台幣
-               </button>
+      {/* --- 全新的雙幣表單 --- */}
+      <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title={editingExpense ? '編輯開銷' : '新增開銷'}>
+         <form onSubmit={handleSave} className="space-y-4">
+            <div className="bg-stone-100 p-1 rounded-full grid grid-cols-2 gap-1">
+                <button type="button" onClick={() => setFormData(f => ({...f, currency: 'JPY'}))} className={`py-2 text-sm font-bold rounded-full ${formData.currency === 'JPY' ? 'bg-white shadow-sm' : 'text-stone-500'}`}>日幣 (JPY)</button>
+                <button type="button" onClick={() => setFormData(f => ({...f, currency: 'TWD'}))} className={`py-2 text-sm font-bold rounded-full ${formData.currency === 'TWD' ? 'bg-white shadow-sm' : 'text-stone-500'}`}>台幣 (TWD)</button>
             </div>
-
-            {/* Amount Input */}
             <div>
-               <label className="block text-xs font-bold text-stone-400 mb-1.5 ml-1">金額</label>
-               <div className="relative group">
-                  <span className={`absolute left-4 top-1/2 -translate-y-1/2 text-xl font-black transition-colors ${formData.amount ? 'text-stone-800' : 'text-stone-300'}`}>
-                     {inputCurrency === 'JPY' ? '¥' : '$'}
-                  </span>
-                  <input 
-                    type="number"
-                    inputMode="decimal"
-                    required
-                    autoFocus
-                    placeholder="0"
-                    className="w-full pl-10 pr-4 py-4 rounded-2xl border-2 border-stone-100 bg-stone-50/50 font-black text-3xl text-stone-800 focus:border-orange-400 focus:bg-white focus:outline-none transition-all placeholder:text-stone-200"
-                    value={formData.amount}
-                    onChange={e => setFormData({...formData, amount: e.target.value})}
-                  />
-               </div>
+              <label className="block text-xs font-bold text-stone-600 mb-1">項目</label>
+              <input required placeholder='晚餐：函館朝市海鮮丼' className="w-full p-3 rounded-xl border-2 border-stone-200" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})}/>
+           </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-xs font-bold text-stone-600 mb-1">金額 ({formData.currency})</label>
+                    <input required type="number" inputMode="numeric" placeholder='3000' className="w-full p-3 rounded-xl border-2 border-stone-200" value={formData.amount === 0 ? '' : formData.amount} onChange={e => setFormData({...formData, amount: Number(e.target.value)})} />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-stone-600 mb-1">日期</label>
+                    <input required type="date" className="w-full p-3 rounded-xl border-2 border-stone-200 bg-white" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+                </div>
             </div>
-
-            {/* Item Name */}
-            <div>
-               <label className="block text-xs font-bold text-stone-400 mb-1.5 ml-1">項目名稱</label>
-               <input 
-                 required
-                 placeholder="例如：章魚燒、車票"
-                 className="w-full px-4 py-3.5 rounded-xl border-2 border-stone-100 bg-stone-50/50 font-bold text-stone-800 focus:border-orange-400 focus:bg-white focus:outline-none transition-all placeholder:text-stone-300"
-                 value={formData.item}
-                 onChange={e => setFormData({...formData, item: e.target.value})}
-               />
+           <div>
+                <label className="block text-xs font-bold text-stone-600 mb-1">類別</label>
+                <select className="w-full p-3 rounded-xl border-2 border-stone-200 bg-white" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value as Expense['category']})}>
+                    {CATEGORIES.map(cat => <option key={cat.id}>{cat.label}</option>)}
+                </select>
             </div>
-
-            {/* Category Grid */}
-            <div>
-               <label className="block text-xs font-bold text-stone-400 mb-2 ml-1">選擇分類</label>
-               <div className="grid grid-cols-3 gap-2">
-                  {CATEGORIES.map(cat => {
-                     const isActive = formData.category === cat.id;
-                     return (
-                       <button
-                         key={cat.id}
-                         type="button"
-                         onClick={() => setFormData({...formData, category: cat.id})}
-                         className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all duration-200 ${
-                           isActive 
-                             ? `${cat.color} ${cat.activeBorder} bg-opacity-100 shadow-sm scale-[1.02]` 
-                             : 'bg-stone-50 border-transparent text-stone-400 hover:bg-stone-100'
-                         }`}
-                       >
-                          <cat.icon size={22} strokeWidth={isActive ? 2.5 : 2} />
-                          <span className={`text-[10px] font-bold mt-1.5 ${isActive ? 'opacity-100' : 'opacity-80'}`}>{cat.label}</span>
-                       </button>
-                     )
-                  })}
-               </div>
-            </div>
-
-            <Button type="submit" className="w-full py-4 text-lg shadow-xl shadow-orange-100 mt-2">
-               確認記帳
-            </Button>
-         </form>
+           <div>
+              <label className="block text-xs font-bold text-stone-600 mb-1">備註 (選填)</label>
+              <textarea rows={2} className="w-full p-3 rounded-xl border-2 border-stone-200 resize-none" value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} />
+           </div>
+           <div className="flex gap-3 pt-2">
+            {editingExpense && <Button type="button" variant="danger" onClick={() => handleDelete(editingExpense.id)} className="mr-auto"><Trash2 size={16} /></Button>}
+            <Button variant="secondary" type="button" onClick={() => setIsFormOpen(false)}>取消</Button>
+            <Button type="submit" className="bg-stone-800 text-white">儲存</Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

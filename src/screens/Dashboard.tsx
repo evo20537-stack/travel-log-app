@@ -1,24 +1,23 @@
-
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { 
-  MapPin, Sun, Plus, Calendar as CalendarIcon, 
-  Edit2, Trash2, Navigation, RotateCcw, 
+import {
+  MapPin, Sun, Plus, Calendar as CalendarIcon,
+  Edit2, Trash2, Navigation, RotateCcw,
   Cloud, CloudRain, Snowflake, Search, Upload, Image as ImageIcon,
   Camera, Move, Wallet, Sparkles, Map, ChevronRight, ExternalLink,
-  LocateFixed
+  LocateFixed, CheckCircle
 } from 'lucide-react';
 import { Trip, AppTab, ScheduleEvent, WeatherDay, Expense } from '../types';
 import { getWeatherForecastByCoords } from '../services/weatherService';
-import { getLocationNameByCoords } from '../services/reverseGeocodingService'; 
+import { getLocationNameByCoords } from '../services/reverseGeocodingService';
 
 interface DashboardProps {
   trips: Trip[];
   currentTripId: string;
   onTripChange: (id: string) => void;
-  onAddTrip: (data: { title: string; destination: string; dates: string; image: string; imageOffset: number }) => void;
+  onAddTrip: (data: { title: string; destination: string; dates: string; image: string; image_offset: number }) => void;
   onEditTrip: (id: string, data: Partial<Trip>) => void;
   onDeleteTrip: (id: string) => void;
   onNavigateTab: (tab: AppTab) => void;
@@ -32,20 +31,20 @@ interface DashboardProps {
   expenses: Expense[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ 
-  trips, currentTripId, onTripChange, onAddTrip, onEditTrip, onDeleteTrip, 
-  onNavigateTab, userName, userAvatar, onUpdateUserProfile, 
+const Dashboard: React.FC<DashboardProps> = ({
+  trips, currentTripId, onTripChange, onAddTrip, onEditTrip, onDeleteTrip,
+  onNavigateTab, userName, userAvatar, onUpdateUserProfile,
   events, completedEventIds, onCompleteEvent, onUndoCompleteEvent,
   expenses
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const tripFileRef = useRef<HTMLInputElement>(null);
   const profileFileRef = useRef<HTMLInputElement>(null);
-  
+
   const [isTripModalOpen, setIsTripModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
-  
+
   const [weatherData, setWeatherData] = useState<WeatherDay[]>([]);
   const [weatherLocation, setWeatherLocation] = useState('---,---');
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
@@ -54,8 +53,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [startY, setStartY] = useState(0);
   const [startOffset, setStartOffset] = useState(50);
 
-  const [tripFormData, setTripFormData] = useState({ 
-    title: '', destination: '', dates: '', status: '規劃中', image: '', imageOffset: 50 
+  const [tripFormData, setTripFormData] = useState({
+    title: '', destination: '', dates: '', status: '規劃中', image: '', image_offset: 50
   });
   const [profileFormData, setProfileFormData] = useState({ name: userName, avatar: userAvatar });
 
@@ -69,6 +68,28 @@ const Dashboard: React.FC<DashboardProps> = ({
   useEffect(() => {
       setProfileFormData({ name: userName, avatar: userAvatar });
   }, [userName, userAvatar]);
+
+  // --- 1. THE FIX: Sort events by full date and time ---
+  const sortedEvents = useMemo(() =>
+    [...events].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    [events]
+  );
+
+  // --- 2. THE FIX: Find next event and last completed event from the CORRECTLY sorted list ---
+  const nextUpEvent = sortedEvents.find(e => !completedEventIds.has(e.id));
+  const lastCompletedEvent = useMemo(() => {
+      const nextEventIndex = sortedEvents.findIndex(e => e.id === nextUpEvent?.id);
+      // If there is a next event, and it's not the very first event, then the one before it is the last completed one.
+      if (nextEventIndex > 0) {
+          return sortedEvents[nextEventIndex - 1];
+      }
+      // If there are no "next" events (all are completed), the last one in the sorted list is the last completed one.
+      if (!nextUpEvent && sortedEvents.length > 0) {
+          return sortedEvents[sortedEvents.length - 1];
+      }
+      return null;
+  }, [sortedEvents, nextUpEvent]);
+
 
   const handleFetchCurrentLocationWeather = () => {
     if (!navigator.geolocation) {
@@ -136,7 +157,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     if (!tripFormData.image) return;
     setIsDragging(true);
     setStartY(e.clientY);
-    setStartOffset(tripFormData.imageOffset);
+    setStartOffset(tripFormData.image_offset);
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
 
@@ -144,7 +165,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     if (!isDragging) return;
     const deltaY = e.clientY - startY;
     const newOffset = Math.max(0, Math.min(100, startOffset - (deltaY / 2)));
-    setTripFormData(prev => ({ ...prev, imageOffset: Math.round(newOffset) }));
+    setTripFormData(prev => ({ ...prev, image_offset: Math.round(newOffset) }));
   };
 
   const onImagePointerUp = () => setIsDragging(false);
@@ -158,13 +179,11 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  const nextUpEvent = [...events].sort((a, b) => a.time.localeCompare(b.time)).find(e => !completedEventIds.has(e.id));
-
   return (
     <div className="space-y-6 pb-24 animate-fade-in relative">
       <div className="fixed top-0 left-0 right-0 h-64 overflow-hidden -z-10 pointer-events-none opacity-20">
-        <img 
-            src={currentTrip?.image || ''} 
+        <img
+            src={currentTrip?.image || ''}
             className="w-full h-full object-cover blur-3xl scale-150 transition-all duration-1000"
             alt=""
         />
@@ -173,7 +192,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
       <header className="flex justify-between items-center mb-2">
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={() => { setProfileFormData({ name: userName, avatar: userAvatar }); setIsProfileModalOpen(true); }}
             className="w-12 h-12 rounded-full bg-white overflow-hidden border-2 border-white shadow-xl active:scale-90 transition-transform"
           >
@@ -184,11 +203,11 @@ const Dashboard: React.FC<DashboardProps> = ({
             <h1 className="text-xl font-black text-stone-800">今天想去哪裡？</h1>
           </div>
         </div>
-        <button 
-          onClick={() => { 
-              setEditingTrip(null); 
-              setTripFormData({ title: '', destination: '', dates: '', status: '規劃中', image: '', imageOffset: 50 }); 
-              setIsTripModalOpen(true); 
+        <button
+          onClick={() => {
+              setEditingTrip(null);
+              setTripFormData({ title: '', destination: '', dates: '', status: '規劃中', image: '', image_offset: 50 });
+              setIsTripModalOpen(true);
           }}
           className="bg-stone-800 text-white p-3 rounded-2xl shadow-xl shadow-stone-200 active:scale-95 transition-all"
         >
@@ -201,46 +220,45 @@ const Dashboard: React.FC<DashboardProps> = ({
           <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase">我的冒險旅程</h3>
           <span className="text-[10px] font-bold text-stone-300">左右滑動切換行程</span>
         </div>
-        {/* --- Bug 2 修正: 加入 touch-pan-x 來防止垂直滾動 -- */}
-        <div 
+        <div
           ref={scrollContainerRef}
           className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-2 -mx-5 px-5 scrollbar-hide touch-pan-x"
         >
           {trips.map((trip) => {
             const isSelected = trip.id === currentTripId;
             return (
-              <div 
-                key={trip.id} 
+              <div
+                key={trip.id}
                 onClick={() => onTripChange(trip.id)}
                 className={`min-w-[88%] snap-center transition-all duration-500 cursor-pointer ${isSelected ? 'scale-100 opacity-100' : 'scale-[0.93] opacity-40 grayscale'}`}
               >
-                <Card 
-                  className={`relative overflow-hidden group h-48 border-none shadow-2xl ${isSelected ? 'ring-4 ring-orange-400/30' : ''}`} 
+                <Card
+                  className={`relative overflow-hidden group h-48 border-none shadow-2xl ${isSelected ? 'ring-4 ring-orange-400/30' : ''}`}
                   noPadding
                 >
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
-                  <img 
-                    src={trip.image || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?q=80&w=1000&auto=format&fit=crop'} 
-                    alt={trip.title} 
+                  <img
+                    src={trip.image || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?q=80&w=1000&auto=format&fit=crop'}
+                    alt={trip.title}
                     className="w-full h-full object-cover"
-                    style={{ objectPosition: `50% ${trip.imageOffset ?? 50}%` }}
+                    style={{ objectPosition: `50% ${trip.image_offset ?? 50}%` }}
                   />
-                  
+
                   {isSelected && (
                     <div className="absolute top-4 right-4 z-30 flex gap-2">
-                        <button 
-                            onClick={(e) => { 
-                                e.stopPropagation(); 
-                                setEditingTrip(trip); 
-                                setTripFormData({ 
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingTrip(trip);
+                                setTripFormData({
                                     title: trip.title,
                                     destination: trip.destination || '',
                                     dates: trip.dates,
                                     status: trip.status,
                                     image: trip.image,
-                                    imageOffset: trip.imageOffset ?? 50
-                                }); 
-                                setIsTripModalOpen(true); 
+                                    image_offset: trip.image_offset ?? 50
+                                });
+                                setIsTripModalOpen(true);
                             }}
                             className="p-2.5 bg-white/20 backdrop-blur-md rounded-xl text-white hover:bg-white/40 border border-white/20 shadow-lg"
                         >
@@ -271,14 +289,14 @@ const Dashboard: React.FC<DashboardProps> = ({
       <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
           <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase">{weatherLocation} 天氣</h3>
-          <button 
+          <button
             onClick={handleFetchCurrentLocationWeather}
             className="text-[10px] font-black text-orange-500 flex items-center gap-1.5 bg-orange-50 px-3 py-1.5 rounded-full border border-orange-100 active:scale-95 transition-transform"
           >
             <LocateFixed size={12} /> 更新我的位置
           </button>
         </div>
-        
+
         {isWeatherLoading ? (
           <Card className="h-32 flex flex-col items-center justify-center animate-pulse bg-white/50 border-none">
             <Sun className="text-stone-200 animate-spin-slow mb-2" size={24} />
@@ -286,13 +304,12 @@ const Dashboard: React.FC<DashboardProps> = ({
           </Card>
         ) : weatherData.length > 0 ? (
           <Card className="bg-white/60 backdrop-blur-sm border-stone-100 shadow-sm" noPadding>
-            {/* --- Bug 2 修正: 加入 touch-pan-x 來防止垂直滾動 -- */}
             <div className="flex overflow-x-auto p-5 gap-7 scrollbar-hide touch-pan-x">
               {weatherData.slice(0, 7).map((w, i) => (
                 <div key={i} className="flex flex-col items-center min-w-[50px]">
                   <span className="text-[10px] font-black text-stone-400 mb-2 uppercase">{w.date}</span>
                   <div className="mb-2 scale-125 transition-transform hover:scale-150 duration-300">{getWeatherIcon(w.icon)}</div>
-                  <span className="font-black text-stone-800 text-sm">{w.temp}°</span>
+                  <span className="font-black text-stone-800 text-sm">{w.temp_max}°</span>
                 </div>
               ))}
             </div>
@@ -310,13 +327,13 @@ const Dashboard: React.FC<DashboardProps> = ({
       <div className="pt-2">
         <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase mb-3 px-1">重點摘要</h3>
         <div className="flex gap-3">
-            <button 
+            <button
                 onClick={() => onNavigateTab(AppTab.SCHEDULE)}
                 className="flex-1 flex items-center justify-center gap-2 py-4 bg-white rounded-2xl border-2 border-stone-100 font-black text-stone-700 text-xs shadow-sm active:scale-95 transition-all"
             >
                 <Map size={16} className="text-orange-500" /> 行程地圖
             </button>
-            <button 
+            <button
                 onClick={() => onNavigateTab(AppTab.EXPENSES)}
                 className="flex-1 flex items-center justify-center gap-2 py-4 bg-white rounded-2xl border-2 border-stone-100 font-black text-stone-700 text-xs shadow-sm active:scale-95 transition-all"
             >
@@ -330,41 +347,72 @@ const Dashboard: React.FC<DashboardProps> = ({
           <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase">下一個行程</h3>
           {nextUpEvent && <span className="text-[10px] font-black text-orange-500 bg-orange-100/50 px-2 py-0.5 rounded-md border border-orange-200/50">進行中</span>}
         </div>
-        
+
         {nextUpEvent ? (
-          <Card className="relative overflow-hidden p-6 border-none bg-white text-stone-900 shadow-2xl">
-            <div className="flex gap-5 relative z-10">
-              <div className="flex flex-col items-center justify-center bg-stone-50 rounded-2xl w-16 h-16 border border-stone-100 shrink-0 shadow-inner">
-                <span className="text-sm font-black text-stone-900">{nextUpEvent.time}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="text-xl font-black text-stone-900 truncate leading-tight tracking-tight">{nextUpEvent.title}</h4>
-                <div className="flex items-center gap-1.5 text-stone-400 text-xs mt-1.5 font-bold">
-                  <MapPin size={14} className="text-orange-400" />
-                  <span className="truncate">{nextUpEvent.location}</span>
+          <Card className="relative overflow-hidden p-0 border-none bg-white text-stone-900 shadow-2xl">
+            <div className="p-6">
+                <div className="flex gap-5 relative z-10">
+                  <div className="flex flex-col items-center justify-center bg-stone-50 rounded-2xl w-16 h-16 border border-stone-100 shrink-0 shadow-inner">
+                    <span className="text-sm font-black text-stone-900">{nextUpEvent.time}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-xl font-black text-stone-900 truncate leading-tight tracking-tight">{nextUpEvent.title}</h4>
+                    <div className="flex items-center gap-1.5 text-stone-400 text-xs mt-1.5 font-bold">
+                      <MapPin size={14} className="text-orange-400" />
+                      <span className="truncate">{nextUpEvent.location}</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
+
+                <div className="mt-7 flex gap-3 relative z-10">
+                    {/* --- 3. THE FIX: Smart Navigation Button --- */}
+                    <Button
+                        size="md"
+                        className="flex-1 bg-orange-500 text-white border-none shadow-xl shadow-orange-200 active:bg-orange-600"
+                        onClick={() => {
+                            if (nextUpEvent.mapUrl) {
+                                window.open(nextUpEvent.mapUrl, '_blank');
+                            } else if (nextUpEvent.location) {
+                                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(nextUpEvent.location)}`, '_blank');
+                            }
+                        }}
+                    >
+                        <Navigation size={18} fill="white" /> <span className="font-black">開始導航</span>
+                    </Button>
+                    <button
+                        onClick={() => onCompleteEvent(nextUpEvent.id)}
+                        className="px-6 rounded-xl bg-stone-100 hover:bg-stone-200 border border-stone-200 font-bold text-xs transition-all uppercase tracking-widest text-stone-700"
+                    >
+                        完成
+                    </button>
+                </div>
             </div>
-            
-            <div className="mt-7 flex gap-3 relative z-10">
-                <Button 
-                    size="md" 
-                    className="flex-1 bg-orange-500 text-white border-none shadow-xl shadow-orange-200 active:bg-orange-600" 
-                    onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(nextUpEvent.location)}`, '_blank')}
+            {/* --- 4. THE FIX: Undo Button --- */}
+            {lastCompletedEvent && (
+              <div className="bg-stone-50/70 border-t border-stone-200/80 px-4 py-2 flex items-center justify-center gap-2">
+                <button
+                  onClick={() => onUndoCompleteEvent(lastCompletedEvent.id)}
+                  className="flex items-center gap-2 text-[10px] font-bold text-stone-500 hover:text-orange-500 transition-colors"
                 >
-                    <Navigation size={18} fill="white" /> <span className="font-black">開始導航</span>
-                </Button>
-                <button 
-                    onClick={() => onCompleteEvent(nextUpEvent.id)}
-                    className="px-6 rounded-xl bg-stone-100 hover:bg-stone-200 border border-stone-200 font-bold text-xs transition-all uppercase tracking-widest text-stone-700"
-                >
-                    完成
+                  <RotateCcw size={10} />
+                  <span>返回上一步：<span className="font-black">{lastCompletedEvent.title}</span></span>
                 </button>
-            </div>
+              </div>
+            )}
           </Card>
         ) : (
-          <Card className="bg-stone-50 border-dashed border-stone-200 text-center py-12 opacity-80">
-            <p className="text-stone-400 font-black text-xs tracking-widest">✨ 今天的挑戰都完成囉，祝你有個美好的夜晚！</p>
+          <Card className="bg-stone-50 border-dashed border-stone-200 text-center py-10 opacity-80">
+            <div className="flex flex-col items-center justify-center">
+                <CheckCircle size={32} className="text-green-500 mb-3" />
+                <p className="text-stone-500 font-black text-sm tracking-wider">✨ 所有行程都完成囉！</p>
+                <p className="text-xs text-stone-400 mt-1">祝你有個美好的夜晚！</p>
+                {/* --- 5. THE FIX: Undo button on the final screen --- */}
+                {lastCompletedEvent && (
+                    <Button variant="ghost" className="mt-4" onClick={() => onUndoCompleteEvent(lastCompletedEvent.id)}>
+                        <RotateCcw size={12} className="mr-2" /> 返回上一步
+                    </Button>
+                )}
+            </div>
           </Card>
         )}
       </div>
@@ -373,7 +421,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         <form onSubmit={handleTripSubmit} className="space-y-5">
           <div className="space-y-1">
             <label className="block text-[10px] font-black text-stone-400 tracking-widest uppercase mb-1">行程封面 (可拖動調整位置)</label>
-            <div 
+            <div
                 className="relative h-44 w-full rounded-2xl overflow-hidden bg-stone-100 border-2 border-stone-200 cursor-move group select-none shadow-inner"
                 onPointerDown={onImagePointerDown}
                 onPointerMove={onImagePointerMove}
@@ -383,10 +431,10 @@ const Dashboard: React.FC<DashboardProps> = ({
             >
                 {tripFormData.image ? (
                     <>
-                        <img 
-                            src={tripFormData.image} 
-                            className="w-full h-full object-cover pointer-events-none" 
-                            style={{ objectPosition: `50% ${tripFormData.imageOffset}%` }} 
+                        <img
+                            src={tripFormData.image}
+                            className="w-full h-full object-cover pointer-events-none"
+                            style={{ objectPosition: `50% ${tripFormData.image_offset}%` }}
                         />
                         <div className="absolute inset-0 border-2 border-orange-400/50 pointer-events-none group-active:border-orange-500"></div>
                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/40 p-3 rounded-full text-white pointer-events-none opacity-40 group-hover:opacity-100 transition-opacity">
@@ -400,9 +448,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                 )}
             </div>
-            
+
             <input ref={tripFileRef} type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'trip')} className="hidden" />
-            
+
             <div className="flex gap-2">
                 <Button type="button" variant="secondary" className="flex-1 py-3 text-xs font-black" onClick={() => tripFileRef.current?.click()}>
                     <Upload size={14} /> 上傳封面
@@ -431,7 +479,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               </div>
             </div>
           </div>
-          
+
           <div className="flex gap-3 pt-3">
             {editingTrip && (
                 <button type="button" onClick={() => onDeleteTrip(editingTrip.id)} className="w-14 rounded-2xl bg-red-50 text-red-500 flex items-center justify-center border border-red-100 active:scale-90 transition-transform">
