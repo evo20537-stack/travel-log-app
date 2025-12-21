@@ -212,12 +212,17 @@ const Dashboard: React.FC<DashboardProps> = ({
                   {isSelected && (
                     <div className="absolute top-4 right-4 z-30 flex gap-2">
                         <button 
-                            onClick={(e) => { 
-                                e.stopPropagation(); 
-                                setEditingTrip(trip); 
-                                setTripFormData({ ...trip, destination: trip.destination || '' }); 
-                                setIsTripModalOpen(true); 
-                            }}
+                           onClick={(e) => { 
+    e.stopPropagation(); 
+    setEditingTrip(trip); 
+    // ✅ 修正後：強制給 imageOffset 一個預設值 (例如 50)
+    setTripFormData({ 
+        ...trip, 
+        destination: trip.destination || '',
+        imageOffset: trip.imageOffset || 50 
+    }); 
+    setIsTripModalOpen(true); 
+}}
                             className="p-2.5 bg-white/20 backdrop-blur-md rounded-xl text-white hover:bg-white/40 border border-white/20 shadow-lg"
                         >
                             <Edit2 size={16} />
@@ -474,3 +479,4 @@ const Dashboard: React.FC<DashboardProps> = ({
 };
 
 export default Dashboard;
+
