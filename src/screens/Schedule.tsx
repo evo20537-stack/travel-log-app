@@ -45,9 +45,18 @@ const ScheduleItem: React.FC<ScheduleItemProps> = ({
 }) => {
   const dragControls = useDragControls();
   const x = useMotionValue(0);
-  // Fallback icon logic if icon component is lost during serialization (though in this simple app it's kept in memory)
-  // Re-map icon based on type if needed
-  let EventIcon = event.icon || MapPin;
+
+  // 🔴原本的寫法 (危險，因為 event.icon 可能是壞掉的資料)
+  // let EventIcon = event.icon || MapPin;
+  // if (!event.icon) { ... }
+
+  // 🟢 修改後的寫法 (安全，總是重新對應正確的圖示)
+  // 1. 先根據 event.type 找到對應的設定
+  const typeConfig = EVENT_TYPES.find(t => t.type === event.type);
+  
+  // 2. 如果有設定就用設定的圖示，不然就用預設的 MapPin
+  // 這樣就算資料庫裡的 icon 欄位壞掉，我們也能正確顯示！
+  const EventIcon = typeConfig ? typeConfig.icon : MapPin;
   if (!event.icon) {
      const typeConfig = EVENT_TYPES.find(t => t.type === event.type);
      if (typeConfig) EventIcon = typeConfig.icon;
@@ -522,5 +531,6 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
     </div>
   );
 };
+
 
 export default Schedule;
