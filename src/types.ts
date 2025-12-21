@@ -4,8 +4,17 @@ export interface Trip {
   status: string;
   day: string;
   image: string;
+  imageOffset?: number; // 0-100% for object-position
   color: string;
-  dates: string; // Added for Schedule context
+  dates: string;
+  destination: string;
+}
+
+export interface WeatherDay {
+  date: string;
+  temp: number;
+  condition: string;
+  icon: 'sunny' | 'cloudy' | 'rainy' | 'snowy';
 }
 
 export interface ScheduleEvent {
@@ -13,12 +22,12 @@ export interface ScheduleEvent {
   time: string;
   title: string;
   location: string;
-  mapUrl?: string; // specific google map link
+  mapUrl?: string;
   type: 'transport' | 'activity' | 'food' | 'stay' | 'shopping';
   notes?: string;
-  transitTime?: string; // e.g. "30 mins"
-  color: string; // styling helper
-  icon?: any; // styling helper (LucideIcon)
+  transitTime?: string;
+  color: string;
+  icon?: any;
 }
 
 export interface Expense {
@@ -38,8 +47,8 @@ export interface Booking {
   refNumber: string;
   datetime: string;
   location: string;
-  mapUrl?: string; // specific google map link
-  fileUrl?: string; // Image for "Show Mode"
+  mapUrl?: string;
+  fileUrl?: string;
   notes?: string;
 }
 
@@ -60,7 +69,7 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'model';
   text: string;
-  image?: string; // Base64 for user upload or generated image
+  image?: string;
   isImageEdit?: boolean;
 }
 
