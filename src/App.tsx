@@ -154,7 +154,7 @@ const App: React.FC = () => {
 
     if (!currentTrip) return <div className="text-center p-10">請選擇一個旅程</div>;
 
-    const commonProps = { currentTrip, events: allEvents.data[currentTrip.id] || [], expenses: allExpenses.data[currentTrip.id] || [], bookings: allBookings.data[currentTrip.id] || [], checklists: allChecklists.data[currentTrip.id] || [] };
+    const commonProps = { currentTrip, events: allEvents.data[currentTrip.id] || [], expenses: allExpenses.data[currentTrip.id] || [], bookings: allBookings.data[currentTrip.id] || [], checklist: allChecklists.data[currentTrip.id] || [] };
 
     switch (activeTab) {
       case AppTab.DASHBOARD: return <Dashboard {...commonProps} trips={trips.data} currentTripId={currentTripId} onTripChange={setCurrentTripId} onAddTrip={handleAddTrip} onEditTrip={handleEditTrip} onDeleteTrip={handleDeleteTrip} onNavigateTab={setActiveTab} userName={userProfile.name} userAvatar={userProfile.avatar} onUpdateUserProfile={setUserProfile} completedEventIds={new Set()} onCompleteEvent={()=>{}} onUndoCompleteEvent={()=>{}}  />;

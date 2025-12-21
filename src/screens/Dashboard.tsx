@@ -1,3 +1,4 @@
+
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -5,13 +6,11 @@ import Modal from '../components/ui/Modal';
 import {
   MapPin, Sun, Plus, Calendar as CalendarIcon,
   Edit2, Trash2, Navigation, RotateCcw,
-  Cloud, CloudRain, Snowflake, Search, Upload, Image as ImageIcon,
-  Camera, Move, Wallet, Sparkles, Map, ChevronRight, ExternalLink,
-  LocateFixed, CheckCircle
+  Cloud, CloudRain, Snowflake, Upload, Image as ImageIcon,
+  Camera, Move, Wallet, Map, LocateFixed, CheckCircle, AlertTriangle
 } from 'lucide-react';
-import { Trip, AppTab, ScheduleEvent, WeatherDay, Expense } from '../types';
-import { getWeatherForecastByCoords } from '../services/weatherService';
-import { getLocationNameByCoords } from '../services/reverseGeocodingService';
+import { Trip, AppTab, ScheduleEvent, Expense } from '../types';
+import { useLocationWeather } from '../hooks/useLocationWeather'; // ✨ 匯入我們的新鉤子
 
 interface DashboardProps {
   trips: Trip[];
@@ -45,9 +44,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
 
-  const [weatherData, setWeatherData] = useState<WeatherDay[]>([]);
-  const [weatherLocation, setWeatherLocation] = useState('---,---');
-  const [isWeatherLoading, setIsWeatherLoading] = useState(false);
+  // ✨ 天氣邏輯，現在只需要一行！
+  const { weatherData, locationName, isLoading: isWeatherLoading, error: weatherError, refetch: refetchWeather } = useLocationWeather();
 
   const [isDragging, setIsDragging] = useState(false);
   const [startY, setStartY] = useState(0);
@@ -62,67 +60,25 @@ const Dashboard: React.FC<DashboardProps> = ({
   const totalExpenses = (expenses ?? []).reduce((sum, expense) => sum + expense.amount, 0);
 
   useEffect(() => {
-    handleFetchCurrentLocationWeather();
-  }, []);
-
-  useEffect(() => {
       setProfileFormData({ name: userName, avatar: userAvatar });
   }, [userName, userAvatar]);
 
-  // --- 1. THE FIX: Sort events by full date and time ---
   const sortedEvents = useMemo(() =>
     [...events].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
     [events]
   );
 
-  // --- 2. THE FIX: Find next event and last completed event from the CORRECTLY sorted list ---
   const nextUpEvent = sortedEvents.find(e => !completedEventIds.has(e.id));
   const lastCompletedEvent = useMemo(() => {
       const nextEventIndex = sortedEvents.findIndex(e => e.id === nextUpEvent?.id);
-      // If there is a next event, and it's not the very first event, then the one before it is the last completed one.
       if (nextEventIndex > 0) {
           return sortedEvents[nextEventIndex - 1];
       }
-      // If there are no "next" events (all are completed), the last one in the sorted list is the last completed one.
       if (!nextUpEvent && sortedEvents.length > 0) {
           return sortedEvents[sortedEvents.length - 1];
       }
       return null;
   }, [sortedEvents, nextUpEvent]);
-
-
-  const handleFetchCurrentLocationWeather = () => {
-    if (!navigator.geolocation) {
-      alert('您的瀏覽器不支援地理位置功能');
-      return;
-    }
-
-    setIsWeatherLoading(true);
-    setWeatherData([]);
-    setWeatherLocation('正在定位...');
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-          const forecast = await getWeatherForecastByCoords(latitude, longitude);
-          setWeatherData(forecast);
-          const locationName = await getLocationNameByCoords(latitude, longitude);
-          setWeatherLocation(locationName || '目前位置');
-        } catch (error) {
-          console.error("Weather fetch process failed:", error);
-          setWeatherLocation('天氣載入失敗');
-        } finally {
-          setIsWeatherLoading(false);
-        }
-      },
-      (error) => {
-        console.error("Geolocation error:", error);
-        setWeatherLocation('無法取得位置');
-        setIsWeatherLoading(false);
-      }
-    );
-  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'trip' | 'profile') => {
     const file = e.target.files?.[0];
@@ -269,7 +225,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
                   <div className="absolute bottom-5 left-5 z-20 text-white w-full pr-8">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className={`px-2 py-0.5 ${trip.color}/90 rounded-lg text-[10px] font-black uppercase tracking-wider backdrop-blur-md border border-white/10`}>
+                      <span className={`px-2 py-0.5 bg-orange-400/90 rounded-lg text-[10px] font-black uppercase tracking-wider backdrop-blur-md border border-white/10`}>
                         {trip.status === '規劃中' ? '籌備中' : trip.status}
                       </span>
                       <span className="text-[10px] font-bold opacity-80 flex items-center gap-1">
@@ -286,11 +242,12 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
+      {/* --- ✨ 重構後的天氣卡片渲染邏輯 --- */}
       <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase">{weatherLocation} 天氣</h3>
+          <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase">{locationName} 天氣</h3>
           <button
-            onClick={handleFetchCurrentLocationWeather}
+            onClick={refetchWeather}
             className="text-[10px] font-black text-orange-500 flex items-center gap-1.5 bg-orange-50 px-3 py-1.5 rounded-full border border-orange-100 active:scale-95 transition-transform"
           >
             <LocateFixed size={12} /> 更新我的位置
@@ -298,27 +255,32 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {isWeatherLoading ? (
-          <Card className="h-32 flex flex-col items-center justify-center animate-pulse bg-white/50 border-none">
-            <Sun className="text-stone-200 animate-spin-slow mb-2" size={24} />
-            <div className="h-2 w-20 bg-stone-100 rounded-full"></div>
+          <Card className="h-36 flex flex-col items-center justify-center animate-pulse bg-white/50 border-none">
+            <Sun className="text-stone-200 animate-spin-slow mb-3" size={32} />
+            <div className="h-2 w-24 bg-stone-100 rounded-full"></div>
           </Card>
-        ) : weatherData.length > 0 ? (
-          <Card className="bg-white/60 backdrop-blur-sm border-stone-100 shadow-sm" noPadding>
-            <div className="flex overflow-x-auto p-5 gap-7 scrollbar-hide touch-pan-x">
-              {weatherData.slice(0, 7).map((w, i) => (
-                <div key={i} className="flex flex-col items-center min-w-[50px]">
-                  <span className="text-[10px] font-black text-stone-400 mb-2 uppercase">{w.date}</span>
-                  <div className="mb-2 scale-125 transition-transform hover:scale-150 duration-300">{getWeatherIcon(w.icon)}</div>
-                  <span className="font-black text-stone-800 text-sm">{w.temp_max}°</span>
-                </div>
-              ))}
+        ) : weatherError ? (
+          <Card className="text-center py-8 border-dashed border-red-200 bg-red-50/50" onClick={refetchWeather}>
+            <div className="flex flex-col items-center gap-3 text-red-500">
+                <AlertTriangle className="opacity-50" size={32} />
+                <p className="font-black text-sm">{weatherError}</p>
+                <p className="text-xs font-bold text-red-400/80">點擊此處重試</p>
             </div>
           </Card>
         ) : (
-          <Card className="text-center py-10 border-dashed border-stone-200 bg-transparent" onClick={handleFetchCurrentLocationWeather}>
-            <div className="flex flex-col items-center gap-2">
-                <LocateFixed className="text-stone-300" size={32} />
-                <p className="text-xs font-bold text-stone-400">點此獲取您目前位置的天氣</p>
+          <Card className="bg-white/60 backdrop-blur-sm border-stone-100 shadow-sm" noPadding>
+            <div className="flex overflow-x-auto p-5 gap-6 scrollbar-hide touch-pan-x">
+              {weatherData.slice(0, 7).map((w, i) => (
+                <div key={i} className="flex flex-col items-center min-w-[50px]">
+                  <span className="text-[10px] font-black text-stone-400 mb-3 uppercase tracking-wider">{w.date}</span>
+                  <div className="mb-3 scale-125 transition-transform hover:scale-150 duration-300">{getWeatherIcon(w.icon)}</div>
+                  <div className="flex items-start font-black text-stone-800 text-sm">
+                    <span>{w.temp_max}°</span>
+                    <span className="text-stone-400 font-bold text-xs ml-1">{w.temp_min}°</span>
+                  </div>
+                  <p className="text-[10px] font-bold text-stone-400 mt-1.5 w-max">{w.description}</p>
+                </div>
+              ))}
             </div>
           </Card>
         )}
@@ -365,7 +327,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </div>
 
                 <div className="mt-7 flex gap-3 relative z-10">
-                    {/* --- 3. THE FIX: Smart Navigation Button --- */}
                     <Button
                         size="md"
                         className="flex-1 bg-orange-500 text-white border-none shadow-xl shadow-orange-200 active:bg-orange-600"
@@ -387,7 +348,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                     </button>
                 </div>
             </div>
-            {/* --- 4. THE FIX: Undo Button --- */}
             {lastCompletedEvent && (
               <div className="bg-stone-50/70 border-t border-stone-200/80 px-4 py-2 flex items-center justify-center gap-2">
                 <button
@@ -406,7 +366,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <CheckCircle size={32} className="text-green-500 mb-3" />
                 <p className="text-stone-500 font-black text-sm tracking-wider">✨ 所有行程都完成囉！</p>
                 <p className="text-xs text-stone-400 mt-1">祝你有個美好的夜晚！</p>
-                {/* --- 5. THE FIX: Undo button on the final screen --- */}
                 {lastCompletedEvent && (
                     <Button variant="ghost" className="mt-4" onClick={() => onUndoCompleteEvent(lastCompletedEvent.id)}>
                         <RotateCcw size={12} className="mr-2" /> 返回上一步
