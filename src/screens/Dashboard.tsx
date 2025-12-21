@@ -7,10 +7,15 @@ import {
   MapPin, Sun, Plus, Calendar as CalendarIcon, 
   Edit2, Trash2, Navigation, RotateCcw, 
   Cloud, CloudRain, Snowflake, Search, Upload, Image as ImageIcon,
-  Camera, Move, Wallet, Sparkles, Map, ChevronRight, ExternalLink
+  Camera, Move, Wallet, Sparkles, Map, ChevronRight, ExternalLink,
+  LocateFixed // 新增「我的位置」圖示
 } from 'lucide-react';
 import { Trip, AppTab, ScheduleEvent, WeatherDay, Expense } from '../types';
-import { getWeatherForecast } from '../services/geminiService';
+// --- 移除舊的 geminiService，引入全新的 weatherService ---
+import { getWeatherForecastByCoords } from '../services/weatherService';
+
+// 引入地理編碼服務，將座標轉換回地名
+import { getLocationNameByCoords } from '../services/reverseGeocodingService'; 
 
 interface DashboardProps {
   trips: Trip[];
@@ -27,14 +32,14 @@ interface DashboardProps {
   completedEventIds: Set<string>;
   onCompleteEvent: (id: string) => void;
   onUndoCompleteEvent: (id: string) => void;
-  expenses: Expense[]; // 新增 expenses 屬性
+  expenses: Expense[];
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ 
   trips, currentTripId, onTripChange, onAddTrip, onEditTrip, onDeleteTrip, 
   onNavigateTab, userName, userAvatar, onUpdateUserProfile, 
   events, completedEventIds, onCompleteEvent, onUndoCompleteEvent,
-  expenses // 接收 expenses 屬性
+  expenses
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const tripFileRef = useRef<HTMLInputElement>(null);
@@ -46,11 +51,10 @@ const Dashboard: React.FC<DashboardProps> = ({
   
   // Weather State
   const [weatherData, setWeatherData] = useState<WeatherDay[]>([]);
-  const [weatherSources, setWeatherSources] = useState<any[]>([]);
-  const [weatherLocation, setWeatherLocation] = useState('');
+  const [weatherLocation, setWeatherLocation] = useState('---,---'); // 預設顯示
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
 
-  // Drag State for Image Position
+  // Drag State
   const [isDragging, setIsDragging] = useState(false);
   const [startY, setStartY] = useState(0);
   const [startOffset, setStartOffset] = useState(50);
@@ -63,32 +67,49 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   const currentTrip = trips.find(t => t.id === currentTripId) || trips[0];
 
-  // 計算總支出
   const totalExpenses = (expenses ?? []).reduce((sum, expense) => sum + expense.amount, 0);
-  // 假設一個總預算上限，用於計算進度條百分比
-  const totalBudget = 20000; // 您可以根據實際需求調整這個值
+  const totalBudget = 20000;
   const expensePercentage = Math.min(100, (totalExpenses / totalBudget) * 100);
 
-  // 當選擇的行程改變時，自動抓取天氣
+  // --- 頁面載入時，自動觸發一次「我的位置」天氣查詢 ---
   useEffect(() => {
-    if (currentTrip) {
-      handleFetchWeather(currentTrip.destination);
-    }
-  }, [currentTripId]); 
+    handleFetchCurrentLocationWeather();
+  }, []);
 
-  const handleFetchWeather = async (loc: string) => {
-    if (!loc || loc.trim() === "") return;
-    setIsWeatherLoading(true);
-    setWeatherLocation(loc.trim());
-    try {
-      const result = await getWeatherForecast(loc.trim());
-      setWeatherData(result.days || []);
-      setWeatherSources(result.sources || []);
-    } catch (error) {
-      console.error("Weather fetch failed:", error);
-    } finally {
-      setIsWeatherLoading(false);
+  // --- 核心功能：獲取當前位置並查詢天氣 ---
+  const handleFetchCurrentLocationWeather = () => {
+    if (!navigator.geolocation) {
+      alert('您的瀏覽器不支援地理位置功能');
+      return;
     }
+
+    setIsWeatherLoading(true);
+    setWeatherData([]);
+    setWeatherLocation('正在定位...');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const forecast = await getWeatherForecastByCoords(latitude, longitude);
+          setWeatherData(forecast);
+          // 根據座標反向查詢地點名稱
+          const locationName = await getLocationNameByCoords(latitude, longitude);
+          setWeatherLocation(locationName || '目前位置');
+        } catch (error) {
+          console.error("Weather fetch process failed:", error);
+          setWeatherLocation('天氣載入失敗');
+        } finally {
+          setIsWeatherLoading(false);
+        }
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+        setWeatherLocation('無法取得位置');
+        setIsWeatherLoading(false);
+        alert('無法獲取您的位置。請確認您已允許瀏覽器存取位置資訊。');
+      }
+    );
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'trip' | 'profile') => {
@@ -151,7 +172,6 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   return (
     <div className="space-y-6 pb-24 animate-fade-in relative">
-      {/* 沉浸式氛圍背景 */}
       <div className="fixed top-0 left-0 right-0 h-64 overflow-hidden -z-10 pointer-events-none opacity-20">
         <img 
             src={currentTrip?.image || ''} 
@@ -161,7 +181,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#F7F4EB]" />
       </div>
 
-      {/* 1. Header 問候區域 */}
       <header className="flex justify-between items-center mb-2">
         <div className="flex items-center gap-3">
           <button 
@@ -187,7 +206,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         </button>
       </header>
 
-      {/* 2. 我的冒險旅程 (行程切換) */}
       <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
           <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase">我的冒險旅程</h3>
@@ -223,7 +241,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                             onClick={(e) => { 
                                 e.stopPropagation(); 
                                 setEditingTrip(trip); 
-                                // Fix type mismatch by picking required properties and providing defaults
                                 setTripFormData({ 
                                     title: trip.title,
                                     destination: trip.destination || '',
@@ -260,69 +277,45 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* 3. 當地天氣預報 */}
+      {/* --- 全新的天氣看板 --- */}
       <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase">當地天氣預報</h3>
+          <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase">{weatherLocation} 天氣</h3>
           <button 
-            onClick={() => {
-              const loc = prompt("請輸入想搜尋的國家或城市（例：日本 東京）", weatherLocation || currentTrip?.destination);
-              if (loc && loc.trim() !== "") handleFetchWeather(loc.trim());
-            }}
+            onClick={handleFetchCurrentLocationWeather}
             className="text-[10px] font-black text-orange-500 flex items-center gap-1.5 bg-orange-50 px-3 py-1.5 rounded-full border border-orange-100 active:scale-95 transition-transform"
           >
-            <Search size={12} /> 搜尋地區
+            <LocateFixed size={12} /> 更新我的位置
           </button>
         </div>
         
         {isWeatherLoading ? (
-          // Fix: Added children to the loading Card to resolve component requirement
           <Card className="h-32 flex flex-col items-center justify-center animate-pulse bg-white/50 border-none">
             <Sun className="text-stone-200 animate-spin-slow mb-2" size={24} />
             <div className="h-2 w-20 bg-stone-100 rounded-full"></div>
           </Card>
         ) : weatherData.length > 0 ? (
-          <div className="space-y-2">
-            <Card className="bg-white/60 backdrop-blur-sm border-stone-100 shadow-sm" noPadding>
-              <div className="flex overflow-x-auto p-5 gap-7 scrollbar-hide">
-                {weatherData.slice(0, 5).map((w, i) => (
-                  <div key={i} className="flex flex-col items-center min-w-[50px]">
-                    <span className="text-[10px] font-black text-stone-400 mb-2 uppercase">{i === 0 ? '今天' : w.date}</span>
-                    <div className="mb-2 scale-125 transition-transform hover:scale-150 duration-300">{getWeatherIcon(w.icon)}</div>
-                    <span className="font-black text-stone-800 text-sm">{w.temp}°</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-            {/* Display weather source citations as required by Gemini Search grounding rules */}
-            {weatherSources.length > 0 && (
-              <div className="px-1 pt-1 flex flex-wrap gap-2 items-center">
-                <span className="text-[9px] font-black text-stone-400 uppercase tracking-wider">資料來源:</span>
-                {weatherSources.map((source, idx) => (
-                  <a 
-                    key={idx} 
-                    href={source.web?.uri || source.maps?.uri} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-[9px] font-bold text-blue-500 hover:text-blue-600 transition-colors bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100"
-                  >
-                    {source.web?.title || source.maps?.title || '參考資料'} <ExternalLink size={8} />
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
+          <Card className="bg-white/60 backdrop-blur-sm border-stone-100 shadow-sm" noPadding>
+            <div className="flex overflow-x-auto p-5 gap-7 scrollbar-hide">
+              {weatherData.slice(0, 7).map((w, i) => (
+                <div key={i} className="flex flex-col items-center min-w-[50px]">
+                  <span className="text-[10px] font-black text-stone-400 mb-2 uppercase">{w.date}</span>
+                  <div className="mb-2 scale-125 transition-transform hover:scale-150 duration-300">{getWeatherIcon(w.icon)}</div>
+                  <span className="font-black text-stone-800 text-sm">{w.temp}°</span>
+                </div>
+              ))}
+            </div>
+          </Card>
         ) : (
-          <Card className="text-center py-10 border-dashed border-stone-200 bg-transparent" onClick={() => handleFetchWeather(currentTrip?.destination)}>
+          <Card className="text-center py-10 border-dashed border-stone-200 bg-transparent" onClick={handleFetchCurrentLocationWeather}>
             <div className="flex flex-col items-center gap-2">
-                <Sun className="text-stone-300" size={32} />
-                <p className="text-xs font-bold text-stone-400">點擊載入 {currentTrip?.destination || '當地'} 天氣資訊</p>
+                <LocateFixed className="text-stone-300" size={32} />
+                <p className="text-xs font-bold text-stone-400">點此獲取您目前位置的天氣</p>
             </div>
           </Card>
         )}
       </div>
 
-      {/* 4. 快速工具 (位於天氣與行程之間) */}
       <div className="pt-2">
         <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase mb-3 px-1">財務摘要</h3>
         <div className="flex gap-3">
@@ -341,7 +334,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* 5. 下一個行程 */}
       <div className="pt-2">
         <div className="flex items-center justify-between mb-3 px-1">
           <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase">下一個行程</h3>
@@ -386,7 +378,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         )}
       </div>
 
-      {/* 6. 預算支出概況 (移至最底部) */}
       <div className="pt-2">
         <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase mb-3 px-1">財務摘要</h3>
         <Card 
@@ -410,7 +401,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         </Card>
       </div>
 
-      {/* TRIP EDIT MODAL */}
       <Modal isOpen={isTripModalOpen} onClose={() => setIsTripModalOpen(false)} title={editingTrip ? "編輯行程" : "開啟新旅程"}>
         <form onSubmit={handleTripSubmit} className="space-y-5">
           <div className="space-y-1">
@@ -487,7 +477,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         </form>
       </Modal>
 
-      {/* USER PROFILE MODAL */}
       <Modal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} title="個人資料設定">
         <form onSubmit={handleProfileSubmit} className="space-y-6">
           <div className="flex flex-col items-center">
