@@ -104,19 +104,21 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#F7F4EB] flex justify-center selection:bg-orange-100">
+    <div className="min-h-screen w-full bg-[#F7F4EB] flex justify-center selection:bg-orange-100 overflow-x-hidden">
       {/* 行動端容器：在桌機上會限寬並居中，在手機上則全螢幕 */}
-      <div className="w-full max-w-md bg-[#F7F4EB] min-h-screen flex flex-col relative shadow-[0_0_50px_rgba(0,0,0,0.05)] border-x border-stone-100/50">
+      <div className="w-full max-w-md bg-[#F7F4EB] min-h-screen flex flex-col relative shadow-[0_0_50px_rgba(0,0,0,0.05)]">
         
         {/* 主要內容區 */}
         <main className="flex-1 p-5 overflow-y-auto pb-32 scrollbar-hide pt-safe">
           {renderContent()}
         </main>
 
-        {/* 底部導覽列 - 加上安全區域補丁 */}
+        {/* 底部導覽列 - 加上安全區域補丁與固定置底 */}
         {trips.length > 0 && (
-          <div className="pb-safe bg-white/90 backdrop-blur-md fixed bottom-0 left-0 right-0 max-w-md mx-auto z-50">
-            <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+          <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50">
+            <div className="pb-safe bg-white/90 backdrop-blur-md border-t border-stone-100 rounded-t-3xl shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
+              <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+            </div>
           </div>
         )}
       </div>
