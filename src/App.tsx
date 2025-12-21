@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import BottomNav from './components/BottomNav';
 import Dashboard from './screens/Dashboard';
 import Schedule from './screens/Schedule';
@@ -8,7 +8,6 @@ import Planning from './screens/Planning';
 import { AppTab, Trip, ScheduleEvent } from './types';
 import { Camera, Utensils, Train } from 'lucide-react';
 
-// --- MOCK DATA ---
 const MOCK_TRIPS: Trip[] = [
   {
     id: '1',
@@ -17,7 +16,9 @@ const MOCK_TRIPS: Trip[] = [
     day: 'Day 1',
     dates: '2024.04.10 - 2024.04.15',
     image: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?q=80&w=1000&auto=format&fit=crop',
-    color: 'bg-pink-500'
+    imageOffset: 50,
+    color: 'bg-pink-500',
+    destination: '東京'
   },
   {
     id: '2',
@@ -26,7 +27,9 @@ const MOCK_TRIPS: Trip[] = [
     day: 'Day 1',
     dates: '2024.11.20 - 2024.11.25',
     image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?q=80&w=1000&auto=format&fit=crop',
-    color: 'bg-orange-500'
+    imageOffset: 50,
+    color: 'bg-orange-500',
+    destination: '京都'
   }
 ];
 
@@ -44,13 +47,15 @@ const App: React.FC = () => {
   const [currentTripId, setCurrentTripId] = useState<string>(MOCK_TRIPS[0].id);
   const [allEvents, setAllEvents] = useState<Record<string, ScheduleEvent[]>>(MOCK_EVENTS);
   const [completedEventIds, setCompletedEventIds] = useState<Set<string>>(new Set());
+  
+  // User Profile State
+  const [userProfile, setUserProfile] = useState({
+    name: "旅人",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
+  });
 
   const handleCompleteEvent = (eventId: string) => {
-    setCompletedEventIds(prev => {
-      const newSet = new Set(prev);
-      newSet.add(eventId);
-      return newSet;
-    });
+    setCompletedEventIds(prev => new Set([...prev, eventId]));
   };
 
   const handleUndoCompleteEvent = (eventId: string) => {
@@ -73,15 +78,16 @@ const App: React.FC = () => {
             currentTripId={currentTripId} 
             onTripChange={setCurrentTripId}
             onAddTrip={(data) => {
-                const newT = { id: Date.now().toString(), ...data, status: '規劃中', day: 'Day 1', image: 'https://picsum.photos/600/300', color: 'bg-blue-500' };
+                const newT = { id: Date.now().toString(), ...data, status: '規劃中', day: 'Day 1', color: 'bg-blue-500' };
                 setTrips([newT, ...trips]);
                 setCurrentTripId(newT.id);
             }}
             onEditTrip={(id, data) => setTrips(trips.map(t => t.id === id ? {...t, ...data} : t))}
             onDeleteTrip={(id) => setTrips(trips.filter(t => t.id !== id))}
             onNavigateTab={setActiveTab}
-            userName="旅人"
-            userAvatar="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
+            userName={userProfile.name}
+            userAvatar={userProfile.avatar}
+            onUpdateUserProfile={setUserProfile}
             events={currentEvents}
             completedEventIds={completedEventIds}
             onCompleteEvent={handleCompleteEvent}
@@ -105,15 +111,11 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen w-full bg-[#F7F4EB] flex justify-center selection:bg-orange-100 overflow-x-hidden">
-      {/* 行動端容器：在桌機上會限寬並居中，在手機上則全螢幕 */}
       <div className="w-full max-w-md bg-[#F7F4EB] min-h-screen flex flex-col relative shadow-[0_0_50px_rgba(0,0,0,0.05)]">
-        
-        {/* 主要內容區 */}
         <main className="flex-1 p-5 overflow-y-auto pb-32 scrollbar-hide pt-safe">
           {renderContent()}
         </main>
 
-        {/* 底部導覽列 - 加上安全區域補丁與固定置底 */}
         {trips.length > 0 && (
           <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50">
             <div className="pb-safe bg-white/90 backdrop-blur-md border-t border-stone-100 rounded-t-3xl shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
