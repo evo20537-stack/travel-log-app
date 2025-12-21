@@ -4,10 +4,9 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { 
   Train, Camera, Utensils, BedDouble, ShoppingBag, 
-  MapPin, Edit2, Plus, Trash2, Clock, Map, AlignLeft, Link as LinkIcon,
-  GripVertical
+  MapPin, Edit2, Plus, Trash2, Clock, Map, AlignLeft, Link as LinkIcon
 } from 'lucide-react';
-import { Reorder, useDragControls, useMotionValue, AnimatePresence, motion } from 'framer-motion';
+import { Reorder, useDragControls, useMotionValue, motion } from 'framer-motion';
 import { Trip, ScheduleEvent } from '../types';
 
 interface ScheduleProps {
@@ -46,21 +45,9 @@ const ScheduleItem: React.FC<ScheduleItemProps> = ({
   const dragControls = useDragControls();
   const x = useMotionValue(0);
 
-  // 🔴原本的寫法 (危險，因為 event.icon 可能是壞掉的資料)
-  // let EventIcon = event.icon || MapPin;
-  // if (!event.icon) { ... }
-
-  // 🟢 修改後的寫法 (安全，總是重新對應正確的圖示)
-  // 1. 先根據 event.type 找到對應的設定
+  // ✅ 修正後的寫法：總是根據 event.type 重新抓取正確的 Icon
   const typeConfig = EVENT_TYPES.find(t => t.type === event.type);
-  
-  // 2. 如果有設定就用設定的圖示，不然就用預設的 MapPin
-  // 這樣就算資料庫裡的 icon 欄位壞掉，我們也能正確顯示！
   const EventIcon = typeConfig ? typeConfig.icon : MapPin;
-  if (!event.icon) {
-     const typeConfig = EVENT_TYPES.find(t => t.type === event.type);
-     if (typeConfig) EventIcon = typeConfig.icon;
-  }
   
   const [isPressing, setIsPressing] = useState(false);
 
@@ -341,8 +328,12 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
           <div className="space-y-5">
             <div className="flex items-center gap-4">
               <div className={`p-4 rounded-2xl ${viewingEvent.color}`}>
-                 {viewingEvent.icon && <viewingEvent.icon size={32} />}
-                 {!viewingEvent.icon && <MapPin size={32} />} 
+                 {/* 這裡也修正了：直接根據 type 顯示 icon */}
+                 {(() => {
+                    const typeConfig = EVENT_TYPES.find(t => t.type === viewingEvent.type);
+                    const Icon = typeConfig ? typeConfig.icon : MapPin;
+                    return <Icon size={32} />;
+                 })()}
               </div>
               <div>
                 <span className="text-sm font-bold text-stone-400 bg-stone-100 px-2 py-0.5 rounded-md">
@@ -531,6 +522,5 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
     </div>
   );
 };
-
 
 export default Schedule;
