@@ -1,12 +1,22 @@
-/* 確保字體在全域生效 */
+/* 確保全域字體與背景 */
+@import url('https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&display=swap');
+
+:root {
+  --bg-color: #F7F4EB;
+  --dot-color: #E0E5D5;
+}
+
 body {
-  font-family: 'Zen Maru Gothic', sans-serif;
-  background-color: #F7F4EB;
-  background-image: radial-gradient(#E0E5D5 1.2px, transparent 1.2px);
+  font-family: 'Zen Maru Gothic', sans-serif !important;
+  background-color: var(--bg-color);
+  background-image: radial-gradient(var(--dot-color) 1.2px, transparent 1.2px);
   background-size: 24px 24px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: #44403C;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
 }
 
 /* 隱藏滾動條但保持功能 */
@@ -27,7 +37,7 @@ body {
   padding-top: env(safe-area-inset-top);
 }
 
-/* 自定義陰影 - 讓卡片更有厚度感 (手繪風) */
+/* 自定義陰影 - 手寫風厚度感 */
 .cozy-shadow {
   box-shadow: 4px 4px 0px #E0E5D5;
 }
@@ -40,4 +50,15 @@ body {
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* 防止手機點擊藍色高亮 */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 選取顏色 */
+::selection {
+  background-color: #FED7AA;
+  color: #9A3412;
 }
