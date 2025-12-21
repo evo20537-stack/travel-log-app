@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: 'Zen Maru Gothic', sans-serif;
+  background-color: #F7F4EB;
+  -webkit-tap-highlight-color: transparent;
+}

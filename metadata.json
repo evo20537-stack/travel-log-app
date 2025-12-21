@@ -1,0 +1,9 @@
+{
+  "name": "TravelLog (旅路)",
+  "description": "A cozy, localized travel planner for Taiwanese travelers featuring trip management, expense tracking, and AI-powered assistance.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
