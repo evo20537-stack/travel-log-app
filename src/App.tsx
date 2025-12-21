@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import BottomNav from './components/BottomNav';
 import Dashboard from './screens/Dashboard';
@@ -19,40 +20,68 @@ const MOCK_TRIPS: Trip[] = [
     imageOffset: 50,
     color: 'bg-pink-500',
     destination: '東京'
-  },
-  {
-    id: '2',
-    title: '京都放空之旅 🍁',
-    status: '規劃中',
-    day: 'Day 1',
-    dates: '2024.11.20 - 2024.11.25',
-    image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?q=80&w=1000&auto=format&fit=crop',
-    imageOffset: 50,
-    color: 'bg-orange-500',
-    destination: '京都'
   }
 ];
 
 const MOCK_EVENTS: Record<string, ScheduleEvent[]> = {
   '1': [
     { id: 'e1', time: '09:00', title: '雷門 & 淺草寺', location: '淺草', type: 'activity', color: 'bg-red-100 text-red-500', icon: Camera, notes: '記得去遊客中心頂樓看晴空塔' },
-    { id: 'e2', time: '12:00', title: '敘敘苑燒肉', location: '晴空塔 30F', type: 'food', color: 'bg-orange-100 text-orange-500', icon: Utensils, notes: '已訂位 12:00，窗邊座位' },
-    { id: 'e3', time: '14:30', title: '前往澀谷', location: '地鐵銀座線', type: 'transport', transitTime: '40 mins', color: 'bg-stone-100 text-stone-500', icon: Train },
+    { id: 'e2', time: '12:00', title: '敘敘苑燒肉', location: '晴空塔 30F', type: 'food', color: 'bg-orange-100 text-orange-500', icon: Utensils, notes: '已訂位 12:00，窗邊座位' }
   ]
 };
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AppTab>(AppTab.DASHBOARD);
-  const [trips, setTrips] = useState<Trip[]>(MOCK_TRIPS);
-  const [currentTripId, setCurrentTripId] = useState<string>(MOCK_TRIPS[0].id);
-  const [allEvents, setAllEvents] = useState<Record<string, ScheduleEvent[]>>(MOCK_EVENTS);
-  const [completedEventIds, setCompletedEventIds] = useState<Set<string>>(new Set());
   
-  // User Profile State
-  const [userProfile, setUserProfile] = useState({
-    name: "旅人",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
+  // 初始化資料：嘗試從 LocalStorage 讀取，若無則使用 Mock
+  const [trips, setTrips] = useState<Trip[]>(() => {
+    const saved = localStorage.getItem('travel_trips');
+    return saved ? JSON.parse(saved) : MOCK_TRIPS;
   });
+
+  const [currentTripId, setCurrentTripId] = useState<string>(() => {
+    const saved = localStorage.getItem('travel_current_trip_id');
+    return saved || (trips.length > 0 ? trips[0].id : '');
+  });
+
+  const [allEvents, setAllEvents] = useState<Record<string, ScheduleEvent[]>>(() => {
+    const saved = localStorage.getItem('travel_events');
+    return saved ? JSON.parse(saved) : MOCK_EVENTS;
+  });
+
+  const [completedEventIds, setCompletedEventIds] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('travel_completed_events');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+  
+  const [userProfile, setUserProfile] = useState(() => {
+    const saved = localStorage.getItem('travel_user_profile');
+    return saved ? JSON.parse(saved) : {
+      name: "旅人",
+      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
+    };
+  });
+
+  // 當資料變動時，自動同步到 LocalStorage
+  useEffect(() => {
+    localStorage.setItem('travel_trips', JSON.stringify(trips));
+  }, [trips]);
+
+  useEffect(() => {
+    localStorage.setItem('travel_current_trip_id', currentTripId);
+  }, [currentTripId]);
+
+  useEffect(() => {
+    localStorage.setItem('travel_events', JSON.stringify(allEvents));
+  }, [allEvents]);
+
+  useEffect(() => {
+    localStorage.setItem('travel_completed_events', JSON.stringify(Array.from(completedEventIds)));
+  }, [completedEventIds]);
+
+  useEffect(() => {
+    localStorage.setItem('travel_user_profile', JSON.stringify(userProfile));
+  }, [userProfile]);
 
   const handleCompleteEvent = (eventId: string) => {
     setCompletedEventIds(prev => new Set([...prev, eventId]));
@@ -83,7 +112,13 @@ const App: React.FC = () => {
                 setCurrentTripId(newT.id);
             }}
             onEditTrip={(id, data) => setTrips(trips.map(t => t.id === id ? {...t, ...data} : t))}
-            onDeleteTrip={(id) => setTrips(trips.filter(t => t.id !== id))}
+            onDeleteTrip={(id) => {
+                const updatedTrips = trips.filter(t => t.id !== id);
+                setTrips(updatedTrips);
+                if (currentTripId === id && updatedTrips.length > 0) {
+                    setCurrentTripId(updatedTrips[0].id);
+                }
+            }}
             onNavigateTab={setActiveTab}
             userName={userProfile.name}
             userAvatar={userProfile.avatar}
@@ -116,13 +151,11 @@ const App: React.FC = () => {
           {renderContent()}
         </main>
 
-        {trips.length > 0 && (
-          <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50">
-            <div className="pb-safe bg-white/90 backdrop-blur-md border-t border-stone-100 rounded-t-3xl shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
-              <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
-            </div>
+        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50">
+          <div className="pb-safe bg-white/90 backdrop-blur-md border-t border-stone-100 rounded-t-3xl shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
+            <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
