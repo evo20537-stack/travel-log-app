@@ -37,7 +37,6 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
   });
 
   useEffect(() => {
-    // --- 達人級優化：自動獲取即時匯率 ---
     const fetchRate = async () => {
       try {
         const response = await fetch('https://open.er-api.com/v6/latest/JPY');
@@ -81,10 +80,13 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
     setIsFormOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('確定要刪除這筆開銷嗎？')) {
-      onUpdateExpenses(expenses.filter(e => e.id !== id));
+  // ✨ 修正後的刪除邏輯
+  const handleDelete = () => {
+    if (!editingExpense) return; // 如果沒有正在編輯的項目，則不執行
+    if (window.confirm('確定要刪除這筆開銷嗎？')) {
+      onUpdateExpenses(expenses.filter(e => e.id !== editingExpense.id));
       setIsFormOpen(false);
+      setEditingExpense(null); // 清理狀態
     }
   };
 
@@ -93,6 +95,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
     if (!formData.title.trim() || !formData.amount) return;
     const newOrUpdatedExpense: Expense = {
       id: editingExpense ? editingExpense.id : uuidv4(),
+      trip_id: currentTrip.id, // 確保 trip_id 被設置
       ...formData,
       amount: Number(formData.amount) || 0,
     };
@@ -102,6 +105,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
     updatedList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     onUpdateExpenses(updatedList);
     setIsFormOpen(false);
+    setEditingExpense(null); // 清理狀態
   };
 
   const getCategoryConfig = (catId: Expense['category']) => CATEGORIES.find(c => c.id === catId) || CATEGORIES[5];
@@ -118,7 +122,6 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
         </div>
       </header>
 
-      {/* --- 全新的雙幣總覽卡 --- */}
       <Card className="bg-gradient-to-br from-stone-800 to-stone-900 text-white shadow-2xl shadow-stone-200">
         <div className="grid grid-cols-2 gap-4 divide-x divide-white/20">
           <div className="pr-4">
@@ -180,7 +183,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
                     </div>
                     <div className="text-right pl-4 pr-4">
                         <p className={`font-black text-lg ${isJPY ? 'text-sky-600' : 'text-emerald-600'}`}>{isJPY ? '¥' : '$'}{exp.amount.toLocaleString()}</p>
-                        <p className="text-xs text-stone-400 font-mono">≈ {isJPY ? '$' : '¥'}{Math.round(convertedAmount).toLocaleString()}</p>
+                        <p className="text-xs text-stone-400 font-mono">≈ {isJPY ? '¥' : '$'}{Math.round(convertedAmount).toLocaleString()}</p>
                     </div>
                 </div>
               </Card>
@@ -189,7 +192,6 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
         )}
       </div>
 
-      {/* --- 全新的雙幣表單 --- */}
       <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title={editingExpense ? '編輯開銷' : '新增開銷'}>
          <form onSubmit={handleSave} className="space-y-4">
             <div className="bg-stone-100 p-1 rounded-full grid grid-cols-2 gap-1">
@@ -221,7 +223,8 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
               <textarea rows={2} className="w-full p-3 rounded-xl border-2 border-stone-200 resize-none" value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} />
            </div>
            <div className="flex gap-3 pt-2">
-            {editingExpense && <Button type="button" variant="danger" onClick={() => handleDelete(editingExpense.id)} className="mr-auto"><Trash2 size={16} /></Button>}
+            {/* ✨ 修正後的刪除按鈕 */}
+            {editingExpense && <Button type="button" variant="danger" onClick={handleDelete} className="mr-auto"><Trash2 size={16} /></Button>}
             <Button variant="secondary" type="button" onClick={() => setIsFormOpen(false)}>取消</Button>
             <Button type="submit" className="bg-stone-800 text-white">儲存</Button>
           </div>
