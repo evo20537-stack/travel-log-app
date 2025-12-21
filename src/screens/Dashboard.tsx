@@ -7,7 +7,7 @@ import {
   MapPin, Sun, Plus, Calendar as CalendarIcon, 
   Edit2, Trash2, Navigation, RotateCcw, 
   Cloud, CloudRain, Snowflake, Search, Upload, Image as ImageIcon,
-  Camera, Move, Wallet, Sparkles, Map, ChevronRight
+  Camera, Move, Wallet, Sparkles, Map, ChevronRight, ExternalLink
 } from 'lucide-react';
 import { Trip, AppTab, ScheduleEvent, WeatherDay } from '../types';
 import { getWeatherForecast } from '../services/geminiService';
@@ -212,17 +212,20 @@ const Dashboard: React.FC<DashboardProps> = ({
                   {isSelected && (
                     <div className="absolute top-4 right-4 z-30 flex gap-2">
                         <button 
-                           onClick={(e) => { 
-    e.stopPropagation(); 
-    setEditingTrip(trip); 
-    // ✅ 修正後：強制給 imageOffset 一個預設值 (例如 50)
-    setTripFormData({ 
-        ...trip, 
-        destination: trip.destination || '',
-        imageOffset: trip.imageOffset || 50 
-    }); 
-    setIsTripModalOpen(true); 
-}}
+                            onClick={(e) => { 
+                                e.stopPropagation(); 
+                                setEditingTrip(trip); 
+                                // Fix type mismatch by picking required properties and providing defaults
+                                setTripFormData({ 
+                                    title: trip.title,
+                                    destination: trip.destination || '',
+                                    dates: trip.dates,
+                                    status: trip.status,
+                                    image: trip.image,
+                                    imageOffset: trip.imageOffset ?? 50
+                                }); 
+                                setIsTripModalOpen(true); 
+                            }}
                             className="p-2.5 bg-white/20 backdrop-blur-md rounded-xl text-white hover:bg-white/40 border border-white/20 shadow-lg"
                         >
                             <Edit2 size={16} />
@@ -265,19 +268,42 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
         
         {isWeatherLoading ? (
-          <Card className="h-32 flex items-center justify-center animate-pulse bg-white/50 border-none" />
-        ) : weatherData.length > 0 ? (
-          <Card className="bg-white/60 backdrop-blur-sm border-stone-100 shadow-sm" noPadding>
-            <div className="flex overflow-x-auto p-5 gap-7 scrollbar-hide">
-              {weatherData.slice(0, 5).map((w, i) => (
-                <div key={i} className="flex flex-col items-center min-w-[50px]">
-                  <span className="text-[10px] font-black text-stone-400 mb-2 uppercase">{i === 0 ? '今天' : w.date}</span>
-                  <div className="mb-2 scale-125 transition-transform hover:scale-150 duration-300">{getWeatherIcon(w.icon)}</div>
-                  <span className="font-black text-stone-800 text-sm">{w.temp}°</span>
-                </div>
-              ))}
-            </div>
+          // Fix: Added children to the loading Card to resolve component requirement
+          <Card className="h-32 flex flex-col items-center justify-center animate-pulse bg-white/50 border-none">
+            <Sun className="text-stone-200 animate-spin-slow mb-2" size={24} />
+            <div className="h-2 w-20 bg-stone-100 rounded-full"></div>
           </Card>
+        ) : weatherData.length > 0 ? (
+          <div className="space-y-2">
+            <Card className="bg-white/60 backdrop-blur-sm border-stone-100 shadow-sm" noPadding>
+              <div className="flex overflow-x-auto p-5 gap-7 scrollbar-hide">
+                {weatherData.slice(0, 5).map((w, i) => (
+                  <div key={i} className="flex flex-col items-center min-w-[50px]">
+                    <span className="text-[10px] font-black text-stone-400 mb-2 uppercase">{i === 0 ? '今天' : w.date}</span>
+                    <div className="mb-2 scale-125 transition-transform hover:scale-150 duration-300">{getWeatherIcon(w.icon)}</div>
+                    <span className="font-black text-stone-800 text-sm">{w.temp}°</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+            {/* Display weather source citations as required by Gemini Search grounding rules */}
+            {weatherSources.length > 0 && (
+              <div className="px-1 pt-1 flex flex-wrap gap-2 items-center">
+                <span className="text-[9px] font-black text-stone-400 uppercase tracking-wider">資料來源:</span>
+                {weatherSources.map((source, idx) => (
+                  <a 
+                    key={idx} 
+                    href={source.web?.uri || source.maps?.uri} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-[9px] font-bold text-blue-500 hover:text-blue-600 transition-colors bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100"
+                  >
+                    {source.web?.title || source.maps?.title || '參考資料'} <ExternalLink size={8} />
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
         ) : (
           <Card className="text-center py-10 border-dashed border-stone-200 bg-transparent" onClick={() => handleFetchWeather(currentTrip?.destination)}>
             <div className="flex flex-col items-center gap-2">
@@ -479,4 +505,3 @@ const Dashboard: React.FC<DashboardProps> = ({
 };
 
 export default Dashboard;
-
