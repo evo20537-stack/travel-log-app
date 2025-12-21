@@ -167,7 +167,7 @@ const App: React.FC = () => {
 
     if (deleteErrors.length > 0) {
       console.error("刪除子項目失敗:", deleteErrors);
-      alert(`刪除旅程的相關資料時發生錯誤： ${deleteErrors.map(e => e.message).join('\n')}`);
+      alert(`刪除旅程的相關資料時發生錯誤： ${deleteErrors.map(e => e!.message).join('\n')}`);
       return;
     }
     console.log("✅ 所有子項目都已刪除");
