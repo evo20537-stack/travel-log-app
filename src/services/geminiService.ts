@@ -1,5 +1,4 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
 import { WeatherDay } from "../types";
 
 export interface WeatherForecastResult {
@@ -65,3 +64,4 @@ export const getWeatherForecast = async (location: string): Promise<WeatherForec
 export const sendChatMessage = async (currentMessage: string): Promise<string> => {
   return "【系統訊息】AI 助理正在調整中。";
 };
+
