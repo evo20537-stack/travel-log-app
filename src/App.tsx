@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import BottomNav from './components/BottomNav';
 import Dashboard from './screens/Dashboard';
 import Schedule from './screens/Schedule';
@@ -6,9 +6,9 @@ import Expenses from './screens/Expenses';
 import Bookings from './screens/Bookings';
 import Planning from './screens/Planning';
 import { AppTab, Trip, ScheduleEvent } from './types';
-import { Camera, Utensils, Train, BedDouble, ShoppingBag } from 'lucide-react';
+import { Camera, Utensils, Train } from 'lucide-react';
 
-// --- MOCK DATA (Local Mode) ---
+// --- MOCK DATA ---
 const MOCK_TRIPS: Trip[] = [
   {
     id: '1',
@@ -35,85 +35,35 @@ const MOCK_EVENTS: Record<string, ScheduleEvent[]> = {
     { id: 'e1', time: '09:00', title: '雷門 & 淺草寺', location: '淺草', type: 'activity', color: 'bg-red-100 text-red-500', icon: Camera, notes: '記得去遊客中心頂樓看晴空塔' },
     { id: 'e2', time: '12:00', title: '敘敘苑燒肉', location: '晴空塔 30F', type: 'food', color: 'bg-orange-100 text-orange-500', icon: Utensils, notes: '已訂位 12:00，窗邊座位' },
     { id: 'e3', time: '14:30', title: '前往澀谷', location: '地鐵銀座線', type: 'transport', transitTime: '40 mins', color: 'bg-stone-100 text-stone-500', icon: Train },
-    { id: 'e4', time: '15:30', title: 'SHIBUYA SKY', location: '澀谷 Scramble Square', type: 'activity', color: 'bg-blue-100 text-blue-500', icon: Camera, notes: '預約場次 15:40' },
-    { id: 'e5', time: '18:00', title: 'AFURI 拉麵', location: '原宿', type: 'food', color: 'bg-orange-100 text-orange-500', icon: Utensils },
   ]
 };
 
 const App: React.FC = () => {
-  // Navigation State
   const [activeTab, setActiveTab] = useState<AppTab>(AppTab.DASHBOARD);
-  
-  // Data State (Local)
   const [trips, setTrips] = useState<Trip[]>(MOCK_TRIPS);
   const [currentTripId, setCurrentTripId] = useState<string>(MOCK_TRIPS[0].id);
-  
-  // Schedule State (Local)
   const [allEvents, setAllEvents] = useState<Record<string, ScheduleEvent[]>>(MOCK_EVENTS);
   const [completedEventIds, setCompletedEventIds] = useState<Set<string>>(new Set());
 
-  // Trip Handlers
-  const handleAddTrip = (data: { title: string; destination: string; dates: string }) => {
-    const randomId = Math.floor(Math.random() * 1000);
-    const newTrip: Trip = {
-      id: Date.now().toString(),
-      title: data.title || `${data.destination}之旅 ✨`,
-      status: '規劃中',
-      day: 'Day 1',
-      dates: data.dates,
-      image: `https://picsum.photos/seed/${randomId}/600/300`, // Random placeholder
-      color: 'bg-blue-500'
-    };
-    
-    setTrips([newTrip, ...trips]);
-    setCurrentTripId(newTrip.id);
-  };
-
-  const handleEditTrip = (id: string, updatedData: Partial<Trip>) => {
-    setTrips(trips.map(t => t.id === id ? { ...t, ...updatedData } : t));
-  };
-
-  const handleDeleteTrip = (id: string) => {
-    if (window.confirm("確定要刪除這個行程嗎？(本機模式)")) {
-      const newTrips = trips.filter(t => t.id !== id);
-      setTrips(newTrips);
-      if (newTrips.length > 0) {
-        setCurrentTripId(newTrips[0].id);
-      } else {
-        setCurrentTripId('');
-      }
-    }
-  };
-
-  // Schedule Handlers
-  const handleUpdateEvents = (tripId: string, updatedEvents: ScheduleEvent[]) => {
-    setAllEvents(prev => ({
-      ...prev,
-      [tripId]: updatedEvents
-    }));
-  };
-
   const handleCompleteEvent = (eventId: string) => {
-    const newSet = new Set(completedEventIds);
-    newSet.add(eventId);
-    setCompletedEventIds(newSet);
+    setCompletedEventIds(prev => {
+      const newSet = new Set(prev);
+      newSet.add(eventId);
+      return newSet;
+    });
   };
 
   const handleUndoCompleteEvent = (eventId: string) => {
-    const newSet = new Set(completedEventIds);
-    newSet.delete(eventId);
-    setCompletedEventIds(newSet);
+    setCompletedEventIds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(eventId);
+      return newSet;
+    });
   };
 
-  // Render Helpers
   const renderContent = () => {
     const currentTrip = trips.find(t => t.id === currentTripId) || trips[0];
     const currentEvents = currentTrip ? (allEvents[currentTrip.id] || []) : [];
-
-    // Safety check if no trips exist
-    if (!currentTrip && activeTab !== AppTab.DASHBOARD) {
-        setActiveTab(AppTab.DASHBOARD);
-    }
 
     switch (activeTab) {
       case AppTab.DASHBOARD: 
@@ -122,11 +72,15 @@ const App: React.FC = () => {
             trips={trips} 
             currentTripId={currentTripId} 
             onTripChange={setCurrentTripId}
-            onAddTrip={handleAddTrip}
-            onEditTrip={handleEditTrip}
-            onDeleteTrip={handleDeleteTrip}
+            onAddTrip={(data) => {
+                const newT = { id: Date.now().toString(), ...data, status: '規劃中', day: 'Day 1', image: 'https://picsum.photos/600/300', color: 'bg-blue-500' };
+                setTrips([newT, ...trips]);
+                setCurrentTripId(newT.id);
+            }}
+            onEditTrip={(id, data) => setTrips(trips.map(t => t.id === id ? {...t, ...data} : t))}
+            onDeleteTrip={(id) => setTrips(trips.filter(t => t.id !== id))}
             onNavigateTab={setActiveTab}
-            userName="旅人" // Hardcoded for guest mode
+            userName="旅人"
             userAvatar="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
             events={currentEvents}
             completedEventIds={completedEventIds}
@@ -139,29 +93,33 @@ const App: React.FC = () => {
           <Schedule 
             currentTrip={currentTrip} 
             events={currentEvents}
-            onUpdateEvents={(events) => handleUpdateEvents(currentTrip.id, events)}
+            onUpdateEvents={(evs) => setAllEvents({...allEvents, [currentTrip.id]: evs})}
           />
         ) : null;
-      case AppTab.BOOKINGS: 
-        return <Bookings currentTripId={currentTripId} />;
-      case AppTab.EXPENSES: 
-        return <Expenses currentTripId={currentTripId} />;
-      case AppTab.PLANNING: 
-        return <Planning currentTripId={currentTripId} />;
-      default: 
-        return null;
+      case AppTab.BOOKINGS: return <Bookings currentTripId={currentTripId} />;
+      case AppTab.EXPENSES: return <Expenses currentTripId={currentTripId} />;
+      case AppTab.PLANNING: return <Planning currentTripId={currentTripId} />;
+      default: return null;
     }
   };
 
   return (
-    <div className="min-h-screen max-w-md mx-auto relative bg-[#F7F4EB] flex flex-col shadow-2xl shadow-stone-200">
-      <main className="flex-1 p-5 overflow-y-auto pb-24 scrollbar-hide">
-        {renderContent()}
-      </main>
+    <div className="min-h-screen w-full bg-[#F7F4EB] flex justify-center selection:bg-orange-100">
+      {/* 行動端容器：在桌機上會限寬並居中，在手機上則全螢幕 */}
+      <div className="w-full max-w-md bg-[#F7F4EB] min-h-screen flex flex-col relative shadow-[0_0_50px_rgba(0,0,0,0.05)] border-x border-stone-100/50">
+        
+        {/* 主要內容區 */}
+        <main className="flex-1 p-5 overflow-y-auto pb-32 scrollbar-hide pt-safe">
+          {renderContent()}
+        </main>
 
-      {trips.length > 0 && (
-        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
-      )}
+        {/* 底部導覽列 - 加上安全區域補丁 */}
+        {trips.length > 0 && (
+          <div className="pb-safe bg-white/90 backdrop-blur-md fixed bottom-0 left-0 right-0 max-w-md mx-auto z-50">
+            <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+          </div>
+        )}
+      </div>
     </div>
   );
 };
