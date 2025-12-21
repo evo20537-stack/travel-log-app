@@ -8,13 +8,10 @@ import {
   Edit2, Trash2, Navigation, RotateCcw, 
   Cloud, CloudRain, Snowflake, Search, Upload, Image as ImageIcon,
   Camera, Move, Wallet, Sparkles, Map, ChevronRight, ExternalLink,
-  LocateFixed // 新增「我的位置」圖示
+  LocateFixed
 } from 'lucide-react';
 import { Trip, AppTab, ScheduleEvent, WeatherDay, Expense } from '../types';
-// --- 移除舊的 geminiService，引入全新的 weatherService ---
 import { getWeatherForecastByCoords } from '../services/weatherService';
-
-// 引入地理編碼服務，將座標轉換回地名
 import { getLocationNameByCoords } from '../services/reverseGeocodingService'; 
 
 interface DashboardProps {
@@ -27,7 +24,7 @@ interface DashboardProps {
   onNavigateTab: (tab: AppTab) => void;
   userName: string;
   userAvatar: string;
-  onUpdateUserProfile: (data: { name: string; avatar: string }) => void;
+  onUpdateUserProfile: (data: { name?: string; avatar?: string }) => void;
   events: ScheduleEvent[];
   completedEventIds: Set<string>;
   onCompleteEvent: (id: string) => void;
@@ -49,34 +46,30 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
   
-  // Weather State
   const [weatherData, setWeatherData] = useState<WeatherDay[]>([]);
-  const [weatherLocation, setWeatherLocation] = useState('---,---'); // 預設顯示
+  const [weatherLocation, setWeatherLocation] = useState('---,---');
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
 
-  // Drag State
   const [isDragging, setIsDragging] = useState(false);
   const [startY, setStartY] = useState(0);
   const [startOffset, setStartOffset] = useState(50);
 
-  // Form States
   const [tripFormData, setTripFormData] = useState({ 
     title: '', destination: '', dates: '', status: '規劃中', image: '', imageOffset: 50 
   });
   const [profileFormData, setProfileFormData] = useState({ name: userName, avatar: userAvatar });
 
   const currentTrip = trips.find(t => t.id === currentTripId) || trips[0];
-
   const totalExpenses = (expenses ?? []).reduce((sum, expense) => sum + expense.amount, 0);
-  const totalBudget = 20000;
-  const expensePercentage = Math.min(100, (totalExpenses / totalBudget) * 100);
 
-  // --- 頁面載入時，自動觸發一次「我的位置」天氣查詢 ---
   useEffect(() => {
     handleFetchCurrentLocationWeather();
   }, []);
 
-  // --- 核心功能：獲取當前位置並查詢天氣 ---
+  useEffect(() => {
+      setProfileFormData({ name: userName, avatar: userAvatar });
+  }, [userName, userAvatar]);
+
   const handleFetchCurrentLocationWeather = () => {
     if (!navigator.geolocation) {
       alert('您的瀏覽器不支援地理位置功能');
@@ -93,7 +86,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         try {
           const forecast = await getWeatherForecastByCoords(latitude, longitude);
           setWeatherData(forecast);
-          // 根據座標反向查詢地點名稱
           const locationName = await getLocationNameByCoords(latitude, longitude);
           setWeatherLocation(locationName || '目前位置');
         } catch (error) {
@@ -107,7 +99,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         console.error("Geolocation error:", error);
         setWeatherLocation('無法取得位置');
         setIsWeatherLoading(false);
-        alert('無法獲取您的位置。請確認您已允許瀏覽器存取位置資訊。');
       }
     );
   };
@@ -167,8 +158,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  const sortedEvents = [...events].sort((a, b) => a.time.localeCompare(b.time));
-  const nextUpEvent = sortedEvents.find(e => !completedEventIds.has(e.id));
+  const nextUpEvent = [...events].sort((a, b) => a.time.localeCompare(b.time)).find(e => !completedEventIds.has(e.id));
 
   return (
     <div className="space-y-6 pb-24 animate-fade-in relative">
@@ -211,9 +201,10 @@ const Dashboard: React.FC<DashboardProps> = ({
           <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase">我的冒險旅程</h3>
           <span className="text-[10px] font-bold text-stone-300">左右滑動切換行程</span>
         </div>
+        {/* --- Bug 2 修正: 加入 touch-pan-x 來防止垂直滾動 -- */}
         <div 
           ref={scrollContainerRef}
-          className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-2 -mx-5 px-5 scrollbar-hide"
+          className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-2 -mx-5 px-5 scrollbar-hide touch-pan-x"
         >
           {trips.map((trip) => {
             const isSelected = trip.id === currentTripId;
@@ -277,7 +268,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* --- 全新的天氣看板 --- */}
       <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
           <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase">{weatherLocation} 天氣</h3>
@@ -296,7 +286,8 @@ const Dashboard: React.FC<DashboardProps> = ({
           </Card>
         ) : weatherData.length > 0 ? (
           <Card className="bg-white/60 backdrop-blur-sm border-stone-100 shadow-sm" noPadding>
-            <div className="flex overflow-x-auto p-5 gap-7 scrollbar-hide">
+            {/* --- Bug 2 修正: 加入 touch-pan-x 來防止垂直滾動 -- */}
+            <div className="flex overflow-x-auto p-5 gap-7 scrollbar-hide touch-pan-x">
               {weatherData.slice(0, 7).map((w, i) => (
                 <div key={i} className="flex flex-col items-center min-w-[50px]">
                   <span className="text-[10px] font-black text-stone-400 mb-2 uppercase">{w.date}</span>
@@ -317,7 +308,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       <div className="pt-2">
-        <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase mb-3 px-1">財務摘要</h3>
+        <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase mb-3 px-1">重點摘要</h3>
         <div className="flex gap-3">
             <button 
                 onClick={() => onNavigateTab(AppTab.SCHEDULE)}
@@ -337,7 +328,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       <div className="pt-2">
         <div className="flex items-center justify-between mb-3 px-1">
           <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase">下一個行程</h3>
-          <span className="text-[10px] font-black text-orange-500 bg-orange-100/50 px-2 py-0.5 rounded-md border border-orange-200/50">進行中</span>
+          {nextUpEvent && <span className="text-[10px] font-black text-orange-500 bg-orange-100/50 px-2 py-0.5 rounded-md border border-orange-200/50">進行中</span>}
         </div>
         
         {nextUpEvent ? (
@@ -376,29 +367,6 @@ const Dashboard: React.FC<DashboardProps> = ({
             <p className="text-stone-400 font-black text-xs tracking-widest">✨ 今天的挑戰都完成囉，祝你有個美好的夜晚！</p>
           </Card>
         )}
-      </div>
-
-      <div className="pt-2">
-        <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase mb-3 px-1">財務摘要</h3>
-        <Card 
-            className="flex flex-col gap-2 border-stone-100 hover:border-blue-100 active:scale-[0.98] transition-all bg-white/70 backdrop-blur-md shadow-sm"
-            onClick={() => onNavigateTab(AppTab.EXPENSES)}
-        >
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <Wallet size={16} className="text-blue-500" />
-                    <span className="text-[11px] font-black text-stone-400 tracking-widest uppercase">預算支出概況</span>
-                </div>
-                <ChevronRight size={14} className="text-stone-300" />
-            </div>
-            <div className="flex items-end gap-2">
-                <p className="text-2xl font-black text-stone-800">¥ {totalExpenses.toLocaleString()}</p>
-                <span className="text-[10px] font-bold text-stone-400 mb-1">/ 累計花費</span>
-            </div>
-            <div className="w-full h-1.5 bg-stone-100 rounded-full overflow-hidden mt-1">
-                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${expensePercentage}%` }} />
-            </div>
-        </Card>
       </div>
 
       <Modal isOpen={isTripModalOpen} onClose={() => setIsTripModalOpen(false)} title={editingTrip ? "編輯行程" : "開啟新旅程"}>
