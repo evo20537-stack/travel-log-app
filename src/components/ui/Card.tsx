@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface CardProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   className?: string;
   onClick?: () => void;
   noPadding?: boolean;
@@ -25,3 +25,4 @@ const Card: React.FC<CardProps> = ({ children, className = '', onClick, noPaddin
 };
 
 export default Card;
+
