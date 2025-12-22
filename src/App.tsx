@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import BottomNav from './components/BottomNav';
 import Dashboard from './screens/Dashboard';
@@ -20,12 +21,10 @@ const App: React.FC = () => {
   
   // --- 使用者與當前旅程狀態 ---
   const [currentTripId, setCurrentTripId] = useState<string>(() => localStorage.getItem('travel_current_trip_id') || '');
-  const [userProfile, setUserProfile] = useState(() => {
-    try {
-      const storedProfile = localStorage.getItem('travel_user_profile');
-      if (storedProfile) return JSON.parse(storedProfile);
-    } catch (e) { console.error("Failed to parse user profile", e); }
-    return { name: "旅人", avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${Date.now()}` };
+  // 修正 #1：移除從 localStorage 讀取 userProfile，改為從 Supabase 讀取
+  const [userProfile, setUserProfile] = useState({ 
+    name: "旅人", 
+    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${Date.now()}` 
   });
 
   // ✨ 新增：已完成事件的狀態管理
@@ -35,6 +34,20 @@ const App: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       console.log("正在從 Supabase 讀取所有資料...");
+
+      // 修正 #1：在啟動時讀取雲端個人資料
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', 'default_user') // 使用固定的 user ID
+        .single();
+
+      if (profileData) {
+        setUserProfile({ name: profileData.name, avatar: profileData.avatar });
+      } else if (profileError && profileError.code !== 'PGRST116') { // PGRST116 = "找不到單一列"
+        console.error("讀取個人資料失敗:", profileError);
+      }
+
       const { data: tripsData, error: tripsError } = await supabase.from('trips').select('*').order('created_at', { ascending: true });
 
       if (tripsError) {
@@ -81,7 +94,7 @@ const App: React.FC = () => {
 
   // --- 本地快取管理 ---
   useEffect(() => { if(currentTripId) localStorage.setItem('travel_current_trip_id', currentTripId); }, [currentTripId]);
-  useEffect(() => { localStorage.setItem('travel_user_profile', JSON.stringify(userProfile)); }, [userProfile]);
+  // 修正 #1：移除將 userProfile 存入 localStorage 的 useEffect
 
   // ✨ 新增：讀取與儲存「已完成事件」的快取
   useEffect(() => {
@@ -135,6 +148,22 @@ const App: React.FC = () => {
   const handleUpdateBookings = createUpdateHandler(setAllBookings, 'bookings');
   const handleUpdateExpenses = createUpdateHandler(setAllExpenses, 'expenses');
   const handleUpdateChecklists = createUpdateHandler(setAllChecklists, 'checklists');
+
+  // 修正 #1：建立新的 userProfile 更新函式
+  const handleUpdateUserProfile = async (profileData: { name?: string; avatar?: string }) => {
+    const currentProfile = { ...userProfile };
+    // 立即更新 UI 以獲得良好體驗
+    setUserProfile(prev => ({ ...prev, ...profileData }));
+
+    // 使用 upsert 將資料寫入 Supabase，如果不存在則會自動建立
+    const { error } = await supabase.from('profiles').upsert({ id: 'default_user', ...profileData });
+
+    if (error) {
+      console.error("更新個人資料失敗:", error);
+      alert(`更新個人資料失敗: ${error.message}`);
+      setUserProfile(currentProfile); // 如果失敗，則還原 UI
+    }
+  };
 
   // --- 旅程本身的 CRUD 操作 ---
   const handleAddTrip = async (tripData: Omit<Trip, 'id' | 'user_id' | 'created_at'>) => {
@@ -213,13 +242,13 @@ const App: React.FC = () => {
     const currentTrip = trips.find(t => t.id === currentTripId);
     
     if (trips.length === 0) {
-      return <Dashboard trips={[]} currentTripId={''} onAddTrip={handleAddTrip} onNavigateTab={setActiveTab} userName={userProfile.name} userAvatar={userProfile.avatar} onUpdateUserProfile={setUserProfile} events={[]} expenses={[]} onTripChange={()=>{}} onEditTrip={()=>{}} onDeleteTrip={()=>{}} completedEventIds={new Set()} onCompleteEvent={()=>{}} onUndoCompleteEvent={()=>{}} />;
+      // 修正 #1：傳遞新的 handleUpdateUserProfile 函式
+      return <Dashboard trips={[]} currentTripId={''} onAddTrip={handleAddTrip} onNavigateTab={setActiveTab} userName={userProfile.name} userAvatar={userProfile.avatar} onUpdateUserProfile={handleUpdateUserProfile} events={[]} expenses={[]} onTripChange={()=>{}} onEditTrip={()=>{}} onDeleteTrip={()=>{}} completedEventIds={new Set()} onCompleteEvent={()=>{}} onUndoCompleteEvent={()=>{}} />;
     }
 
     if (!currentTrip) return <div className="text-center p-10">正在讀取旅程...</div>;
 
     const commonProps = {
-      key: currentTrip.id,
       currentTrip,
       events: allEvents[currentTrip.id] || [],
       expenses: allExpenses[currentTrip.id] || [],
@@ -229,11 +258,12 @@ const App: React.FC = () => {
 
     switch (activeTab) {
       case AppTab.DASHBOARD: 
-        return <Dashboard {...commonProps} trips={trips} currentTripId={currentTripId} onTripChange={setCurrentTripId} onAddTrip={handleAddTrip} onEditTrip={handleEditTrip} onDeleteTrip={handleDeleteTrip} onNavigateTab={setActiveTab} userName={userProfile.name} userAvatar={userProfile.avatar} onUpdateUserProfile={setUserProfile} completedEventIds={completedEventIds} onCompleteEvent={handleCompleteEvent} onUndoCompleteEvent={handleUndoCompleteEvent} />;
-      case AppTab.SCHEDULE: return <Schedule {...commonProps} onUpdateEvents={handleUpdateEvents} />;
-      case AppTab.BOOKINGS: return <Bookings {...commonProps} onUpdateBookings={handleUpdateBookings} />;
-      case AppTab.EXPENSES: return <Expenses {...commonProps} onUpdateExpenses={handleUpdateExpenses} />;
-      case AppTab.PLANNING: return <Checklist {...commonProps} onUpdateChecklist={handleUpdateChecklists} />;
+        // 修正 #1：傳遞新的 handleUpdateUserProfile 函式
+        return <Dashboard key={currentTrip.id} {...commonProps} trips={trips} currentTripId={currentTripId} onTripChange={setCurrentTripId} onAddTrip={handleAddTrip} onEditTrip={handleEditTrip} onDeleteTrip={handleDeleteTrip} onNavigateTab={setActiveTab} userName={userProfile.name} userAvatar={userProfile.avatar} onUpdateUserProfile={handleUpdateUserProfile} completedEventIds={completedEventIds} onCompleteEvent={handleCompleteEvent} onUndoCompleteEvent={handleUndoCompleteEvent} />;
+      case AppTab.SCHEDULE: return <Schedule key={currentTrip.id} {...commonProps} onUpdateEvents={handleUpdateEvents} />;
+      case AppTab.BOOKINGS: return <Bookings key={currentTrip.id} {...commonProps} onUpdateBookings={handleUpdateBookings} />;
+      case AppTab.EXPENSES: return <Expenses key={currentTrip.id} {...commonProps} onUpdateExpenses={handleUpdateExpenses} />;
+      case AppTab.PLANNING: return <Checklist key={currentTrip.id} {...commonProps} onUpdateChecklist={handleUpdateChecklists} />;
       default: return null;
     }
   };
