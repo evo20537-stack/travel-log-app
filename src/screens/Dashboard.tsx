@@ -9,6 +9,7 @@ import { useLocationWeather } from '../hooks/useLocationWeather';
 import Header from '../components/Dashboard/Header';
 import TripList from '../components/Dashboard/TripList';
 import WeatherCard from '../components/Dashboard/WeatherCard';
+import AddAdventureCard from '../components/Dashboard/AddAdventureCard';
 import TripModal from '../components/Dashboard/TripModal';
 import ProfileModal from '../components/Dashboard/ProfileModal';
 import Card from '../components/ui/Card';
@@ -40,6 +41,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [isTripModalOpen, setIsTripModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const [initialTripDate, setInitialTripDate] = useState<Date | undefined>();
 
   const { weatherData, locationName, isLoading: isWeatherLoading, error: weatherError, refetch: refetchWeather } = useLocationWeather();
 
@@ -67,6 +69,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   const handleAddTripClick = () => {
     setEditingTrip(null);
+    setInitialTripDate(undefined); // 清除預設日期
     setIsTripModalOpen(true);
   }
 
@@ -74,6 +77,12 @@ const Dashboard: React.FC<DashboardProps> = ({
     setEditingTrip(trip);
     setIsTripModalOpen(true);
   }
+
+  const handleStartPlanning = (date: Date) => {
+    setEditingTrip(null);
+    setInitialTripDate(date);
+    setIsTripModalOpen(true);
+  };
 
   if (trips.length === 0) {
     return (
@@ -96,6 +105,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           onAddTrip={onAddTrip}
           onEditTrip={onEditTrip}
           onDeleteTrip={onDeleteTrip}
+          initialDate={initialTripDate}
         />
         <ProfileModal 
           isOpen={isProfileModalOpen} 
@@ -134,13 +144,16 @@ const Dashboard: React.FC<DashboardProps> = ({
         onEditTrip={handleEditTrip} 
       />
 
-      <WeatherCard 
-        weatherData={weatherData} 
-        locationName={locationName} 
-        isLoading={isWeatherLoading} 
-        error={weatherError} 
-        onRefetch={refetchWeather} 
-      />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <WeatherCard 
+          weatherData={weatherData} 
+          locationName={locationName} 
+          isLoading={isWeatherLoading} 
+          error={weatherError} 
+          onRefetch={refetchWeather} 
+        />
+        <AddAdventureCard onStartPlanning={handleStartPlanning} />
+      </div>
 
       <div className="pt-2">
         <h3 className="text-[10px] font-black text-stone-400 tracking-[0.2em] uppercase mb-3 px-1">重點摘要</h3>
@@ -195,6 +208,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         onAddTrip={onAddTrip}
         onEditTrip={onEditTrip}
         onDeleteTrip={onDeleteTrip}
+        initialDate={initialTripDate}
       />
       <ProfileModal 
         isOpen={isProfileModalOpen} 
