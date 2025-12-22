@@ -2,10 +2,10 @@
 import React from 'react';
 import Card from '../ui/Card';
 import { Sun, Cloud, CloudRain, Snowflake, LocateFixed, AlertTriangle } from 'lucide-react';
-import { WeatherData } from '../../hooks/useLocationWeather';
+import { WeatherDay } from '../../types'; // 修正 #1：從正確的來源導入 WeatherDay 類型
 
 interface WeatherCardProps {
-  weatherData: WeatherData[] | null;
+  weatherData: WeatherDay[] | null; // 修正 #2：使用正確的 WeatherDay 類型
   locationName: string;
   isLoading: boolean;
   error: string | null;
