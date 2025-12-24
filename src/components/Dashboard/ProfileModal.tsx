@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Modal from '../ui/Modal';
-import Button from '../ui/Button';
+import { Button } from '../ui/Button';
 import { Camera } from 'lucide-react';
 
 interface ProfileModalProps {

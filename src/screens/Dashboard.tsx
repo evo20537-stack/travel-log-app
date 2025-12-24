@@ -12,7 +12,7 @@ import WeatherCard from '../components/Dashboard/WeatherCard';
 import TripModal from '../components/Dashboard/TripModal';
 import ProfileModal from '../components/Dashboard/ProfileModal';
 import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
+import { Button } from '../components/ui/Button';
 
 interface DashboardProps {
   trips: Trip[];

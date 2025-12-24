@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
+import { Button } from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { Plus, Wallet, Trash2, Utensils, Train, ShoppingBag, BedDouble, Clapperboard, MoreHorizontal } from 'lucide-react';
 import { Trip, Expense } from '../types';

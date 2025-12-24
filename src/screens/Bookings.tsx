@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import Modal from '../components/ui/Modal';
-import Button from '../components/ui/Button';
+import { Button } from '../components/ui/Button';
 import { Trip, Booking } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { format, parseISO } from 'date-fns';
@@ -34,7 +34,7 @@ const generateICS = (booking: Booking) => {
     `DTSTAMP:${format(new Date(), "yyyyMMdd'T'HHmmss'Z'")}`,
     `DTSTART;VALUE=DATE:${format(parseISO(booking.date), 'yyyyMMdd')}`,
     `SUMMARY:${booking.title}`,
-    `DESCRIPTION:預訂號碼: ${booking.confirmation_number || '無'}. 備註: ${booking.notes || '無'}`, 
+    `DESCRIPTION:預訂號碼: ${booking.confirmation_number || '無'}. 備註: ${booking.notes || '無'}`,
     'END:VEVENT',
     'END:VCALENDAR'
   ].join('\r\n');

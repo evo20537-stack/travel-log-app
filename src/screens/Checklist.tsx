@@ -3,7 +3,7 @@ import { Trip, ChecklistItem } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { ShoppingCart, Utensils, Store, Plus, Trash2, Check, Edit2 } from 'lucide-react';
 import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
+import { Button } from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 
 interface ChecklistProps {

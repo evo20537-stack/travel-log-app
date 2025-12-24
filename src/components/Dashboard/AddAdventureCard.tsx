@@ -37,7 +37,7 @@ const AddAdventureCard: React.FC<AddAdventureCardProps> = ({ onStartPlanning }) 
             <Popover>
                 <PopoverTrigger asChild>
                 <Button
-                    variant={"outline"}
+                    variant={"ghost"}
                     className="w-full justify-start text-left font-normal"
                 >
                     <CalendarIcon className="mr-2 h-4 w-4" />

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Modal from '../ui/Modal';
-import Button from '../ui/Button';
+import { Button } from '../ui/Button';
 import { Trash2, Upload, ImageIcon, Move } from 'lucide-react';
 import { Trip } from '../../types';
 
