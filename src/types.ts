@@ -13,6 +13,7 @@ export interface ScheduleEvent {
   id: string;
   trip_id?: string;
   date: string;
+  endDate?: string;
   time: string;
   title: string;
   location: string;

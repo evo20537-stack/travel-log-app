@@ -6,10 +6,10 @@ import Modal from '../components/ui/Modal';
 import { 
   Train, Camera, Utensils, BedDouble, ShoppingBag, 
   MapPin, Edit2, Plus, Trash2, Clock, Map, AlignLeft, Link as LinkIcon, CalendarDays,
-  GripVertical, Copy, ExternalLink
+  GripVertical, Copy, ExternalLink, ArrowRight
 } from 'lucide-react';
 import { Trip, ScheduleEvent } from '../types';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isSameDay } from 'date-fns';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -91,9 +91,9 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
     setLocalEvents(events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
   }, [events]);
 
-  // --- 1. State: Add mapUrl to formData ---
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
+    endDate: '',
     time: '09:00',
     title: '',
     location: '',
@@ -107,7 +107,6 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  // --- 2. Logic: Update handleOpenAdd ---
   const handleOpenAdd = () => {
     setEditingEvent(null);
     const lastEvent = localEvents[localEvents.length - 1];
@@ -116,6 +115,7 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
     
     setFormData({
       date: format(newDate, 'yyyy-MM-dd'),
+      endDate: '',
       time: format(newDate, 'HH:mm'),
       title: '',
       location: '',
@@ -126,13 +126,13 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
     setIsFormOpen(true);
   };
 
-  // --- 3. Logic: Update handleOpenEdit ---
   const handleOpenEdit = (e: React.MouseEvent, event: ScheduleEvent) => {
     e.stopPropagation();
     setEditingEvent(event);
     const eventDate = parseISO(event.date);
     setFormData({
       date: format(eventDate, 'yyyy-MM-dd'),
+      endDate: event.endDate ? format(parseISO(event.endDate), 'yyyy-MM-dd') : '',
       time: format(eventDate, 'HH:mm'),
       title: event.title,
       location: event.location,
@@ -156,14 +156,19 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
     }
   };
 
-  // --- 4. Logic: Update handleSave ---
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.type === 'stay' && formData.endDate && parseISO(formData.endDate) < parseISO(formData.date)) {
+        alert('退房日期不能早於入住日期！');
+        return;
+    }
+
     const typeConfig = EVENT_TYPES.find(t => t.type === formData.type) || EVENT_TYPES[0];
     const combinedDateTime = `${formData.date}T${formData.time}:00`;
 
     const newEvent: Omit<ScheduleEvent, 'id'> & { id?: string } = {
       date: combinedDateTime,
+      endDate: formData.type === 'stay' && formData.endDate ? `${formData.endDate}T${formData.time}:00` : undefined,
       time: formData.time,
       title: formData.title,
       location: formData.location,
@@ -263,7 +268,6 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
                         event={event}
                         onDetail={() => handleOpenDetail(event)}
                         onEdit={(e) => {e.stopPropagation(); handleOpenEdit(e, event);}}
-                        // --- 5. Logic: Implement smart onMap handler ---
                         onMap={(e) => {
                           e.stopPropagation();
                           if (event.mapUrl) {
@@ -282,7 +286,6 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
           </div>
         )}
 
-        {/* --- 6. UI: Update Detail Modal to use mapUrl -- */}
         <Modal isOpen={isDetailOpen} onClose={() => setIsDetailOpen(false)} title="行程詳情">
           {viewingEvent && (
             <div className="space-y-5">
@@ -292,8 +295,18 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <span className="text-[10px] font-black text-stone-400 tracking-widest uppercase">日期</span>
-                  <p className="font-bold text-stone-800">{format(parseISO(viewingEvent.date), 'M 月 d 日')}</p>
+                    <span className="text-[10px] font-black text-stone-400 tracking-widest uppercase">
+                        {viewingEvent.type === 'stay' ? '入住日期' : '日期'}
+                    </span>
+                    <p className="font-bold text-stone-800 flex items-center gap-2">
+                        {format(parseISO(viewingEvent.date), 'M 月 d 日')}
+                        {viewingEvent.type === 'stay' && viewingEvent.endDate && !isSameDay(parseISO(viewingEvent.date), parseISO(viewingEvent.endDate)) && (
+                            <>
+                                <ArrowRight size={14} className="text-stone-400"/>
+                                {format(parseISO(viewingEvent.endDate), 'M 月 d 日')}
+                            </>
+                        )}
+                    </p>
                 </div>
                 <div>
                   <span className="text-[10px] font-black text-stone-400 tracking-widest uppercase">時間</span>
@@ -338,7 +351,7 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
               <label className="block text-xs font-bold text-stone-600 mb-1">行程類型</label>
               <div className="grid grid-cols-3 gap-2">
                 {EVENT_TYPES.map(typeInfo => (
-                  <button key={typeInfo.type} type="button" onClick={() => setFormData({...formData, type: typeInfo.type})} className={`p-2 rounded-lg text-xs font-bold flex flex-col items-center gap-1 border-2 ${formData.type === typeInfo.type ? 'border-orange-400 bg-orange-50' : 'border-stone-200 bg-stone-100'}`}>
+                  <button key={typeInfo.type} type="button" onClick={() => setFormData({...formData, type: typeInfo.type, endDate: ''})} className={`p-2 rounded-lg text-xs font-bold flex flex-col items-center gap-1 border-2 ${formData.type === typeInfo.type ? 'border-orange-400 bg-orange-50' : 'border-stone-200 bg-stone-100'}`}>
                     <typeInfo.icon size={16} />
                     {typeInfo.label}
                   </button>
@@ -347,23 +360,35 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="event-date" className="block text-xs font-bold text-stone-600 mb-1">日期</label>
+                <label htmlFor="event-date" className="block text-xs font-bold text-stone-600 mb-1">{formData.type === 'stay' ? '入住日期' : '日期'}</label>
                 <input id="event-date" type="date" required value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full p-2 rounded-lg border-2 border-stone-200" />
               </div>
-              <div>
-                <label htmlFor="event-time" className="block text-xs font-bold text-stone-600 mb-1">時間</label>
-                <input id="event-time" type="time" required value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="w-full p-2 rounded-lg border-2 border-stone-200" />
-              </div>
+              {formData.type === 'stay' ? (
+                <div>
+                    <label htmlFor="event-end-date" className="block text-xs font-bold text-stone-600 mb-1">退房日期</label>
+                    <input id="event-end-date" type="date" required value={formData.endDate} onChange={e => setFormData({...formData, endDate: e.target.value})} min={formData.date} className="w-full p-2 rounded-lg border-2 border-stone-200" />
+                </div>
+              ) : (
+                <div>
+                    <label htmlFor="event-time" className="block text-xs font-bold text-stone-600 mb-1">時間</label>
+                    <input id="event-time" type="time" required value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="w-full p-2 rounded-lg border-2 border-stone-200" />
+                </div>
+              )}
             </div>
+            {formData.type === 'stay' && (
+                <div>
+                    <label htmlFor="event-time" className="block text-xs font-bold text-stone-600 mb-1">入住時間</label>
+                    <input id="event-time" type="time" required value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="w-full p-2 rounded-lg border-2 border-stone-200" />
+                </div>
+            )}
             <div>
               <label htmlFor="event-title" className="block text-xs font-bold text-stone-600 mb-1">標題</label>
-              <input id="event-title" type="text" placeholder="例：參觀札幌電視塔" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full p-2 rounded-lg border-2 border-stone-200" />
+              <input id="event-title" type="text" placeholder="例：入住東京 XX 飯店" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full p-2 rounded-lg border-2 border-stone-200" />
             </div>
             <div>
               <label htmlFor="event-location" className="block text-xs font-bold text-stone-600 mb-1">地點 (選填)</label>
-              <input id="event-location" type="text" placeholder="例：札幌市中央區大通西1丁目" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full p-2 rounded-lg border-2 border-stone-200" />
+              <input id="event-location" type="text" placeholder="例：東京都新宿區..." value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full p-2 rounded-lg border-2 border-stone-200" />
             </div>
-            {/* --- 7. UI: Add mapUrl input field -- */}
             <div>
               <label htmlFor="event-map-url" className="flex items-center gap-2 text-xs font-bold text-stone-600 mb-1">
                 <LinkIcon size={12} />
@@ -380,7 +405,7 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
             </div>
              <div>
               <label htmlFor="event-notes" className="block text-xs font-bold text-stone-600 mb-1">備註 (選填)</label>
-              <textarea id="event-notes" placeholder="例：記得買白色戀人冰淇淋" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} className="w-full p-2 rounded-lg border-2 border-stone-200 min-h-[80px]"></textarea>
+              <textarea id="event-notes" placeholder="例：下午三點才能 check-in" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} className="w-full p-2 rounded-lg border-2 border-stone-200 min-h-[80px]"></textarea>
             </div>
             <div className="flex gap-3 pt-4">
               {editingEvent && (
