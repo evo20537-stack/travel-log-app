@@ -4,6 +4,7 @@ import Modal from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Trash2, Upload, ImageIcon, Move } from 'lucide-react';
 import { Trip } from '../../types';
+import { format, parseISO } from 'date-fns';
 
 interface TripModalProps {
   isOpen: boolean;
@@ -18,25 +19,47 @@ const TripModal: React.FC<TripModalProps> = ({ isOpen, onClose, editingTrip, onA
   const [tripFormData, setTripFormData] = useState({
     title: '', destination: '', dates: '', status: '規劃中' as Trip['status'], image: '', image_offset: 50
   });
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
   const tripFileRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [startY, setStartY] = useState(0);
   const [startOffset, setStartOffset] = useState(50);
 
   useEffect(() => {
-    if (editingTrip) {
-      setTripFormData({
-        title: editingTrip.title,
-        destination: editingTrip.destination || '',
-        dates: editingTrip.dates,
-        status: editingTrip.status,
-        image: editingTrip.image || '',
-        image_offset: editingTrip.image_offset ?? 50
-      });
-    } else {
-      setTripFormData({ title: '', destination: '', dates: '', status: '規劃中', image: '', image_offset: 50 });
+    if (isOpen) {
+        if (editingTrip) {
+            setTripFormData({
+                title: editingTrip.title,
+                destination: editingTrip.destination || '',
+                dates: editingTrip.dates,
+                status: editingTrip.status,
+                image: editingTrip.image || '',
+                image_offset: editingTrip.image_offset ?? 50
+            });
+            // Clear date pickers; user must re-select if they want to change.
+            setStartDate('');
+            setEndDate('');
+        } else {
+            setTripFormData({ title: '', destination: '', dates: '', status: '規劃中', image: '', image_offset: 50 });
+            setStartDate('');
+            setEndDate('');
+        }
     }
   }, [editingTrip, isOpen]);
+
+  useEffect(() => {
+    if (startDate && endDate) {
+      if (parseISO(endDate) < parseISO(startDate)) {
+        return; 
+      }
+      const formattedStartDate = format(parseISO(startDate), 'MM.dd');
+      const formattedEndDate = format(parseISO(endDate), 'MM.dd');
+      setTripFormData(prev => ({ ...prev, dates: `${formattedStartDate} - ${formattedEndDate}` }));
+    }
+  }, [startDate, endDate]);
+
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -51,6 +74,10 @@ const TripModal: React.FC<TripModalProps> = ({ isOpen, onClose, editingTrip, onA
 
   const handleTripSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (startDate && endDate && parseISO(endDate) < parseISO(startDate)) {
+      alert('結束日期不能早於開始日期！');
+      return;
+    }
     const { image, ...restOfData } = tripFormData;
     const dataToSubmit: any = { ...restOfData, image_offset: Math.round(tripFormData.image_offset) };
 
@@ -61,6 +88,10 @@ const TripModal: React.FC<TripModalProps> = ({ isOpen, onClose, editingTrip, onA
     if (editingTrip) {
       onEditTrip(editingTrip.id, dataToSubmit);
     } else {
+        if (!tripFormData.dates) {
+            alert('請選擇開始與結束日期！');
+            return;
+        }
       onAddTrip(dataToSubmit);
     }
     onClose();
@@ -122,14 +153,31 @@ const TripModal: React.FC<TripModalProps> = ({ isOpen, onClose, editingTrip, onA
             <label className="block text-[10px] font-black text-stone-400 tracking-widest uppercase mb-1">行程標題</label>
             <input required className="w-full px-5 py-3.5 rounded-xl border-2 border-stone-100 focus:border-orange-400 focus:outline-none font-black text-stone-700" value={tripFormData.title} onChange={e => setTripFormData({ ...tripFormData, title: e.target.value })} placeholder="例：東京爆食之旅 🍣" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
+          <div>
               <label className="block text-[10px] font-black text-stone-400 tracking-widest uppercase mb-1">目的地</label>
               <input required className="w-full px-5 py-3.5 rounded-xl border-2 border-stone-100 focus:border-orange-400 focus:outline-none font-black text-stone-700" value={tripFormData.destination} onChange={e => setTripFormData({ ...tripFormData, destination: e.target.value })} placeholder="例：東京" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-black text-stone-400 tracking-widest uppercase mb-1">開始日期</label>
+              <input 
+                type="date" 
+                required={!editingTrip}
+                className="w-full px-5 py-3.5 rounded-xl border-2 border-stone-100 focus:border-orange-400 focus:outline-none font-black text-stone-700" 
+                value={startDate} 
+                onChange={e => setStartDate(e.target.value)}
+              />
             </div>
             <div>
-              <label className="block text-[10px] font-black text-stone-400 tracking-widest uppercase mb-1">日期範圍</label>
-              <input required className="w-full px-5 py-3.5 rounded-xl border-2 border-stone-100 focus:border-orange-400 focus:outline-none font-black text-stone-700" placeholder="04.10 - 04.15" value={tripFormData.dates} onChange={e => setTripFormData({ ...tripFormData, dates: e.target.value })} />
+              <label className="block text-[10px] font-black text-stone-400 tracking-widest uppercase mb-1">結束日期</label>
+              <input 
+                type="date" 
+                required={!editingTrip}
+                className="w-full px-5 py-3.5 rounded-xl border-2 border-stone-100 focus:border-orange-400 focus:outline-none font-black text-stone-700" 
+                value={endDate} 
+                onChange={e => setEndDate(e.target.value)}
+                min={startDate}
+              />
             </div>
           </div>
         </div>
