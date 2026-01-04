@@ -29,46 +29,68 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      // 讀取個人資料（含匯率）
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', 'default_user')
-        .single();
+      try {
+        setLoading(true);
 
-      if (profileData) {
-        setUserProfile({ 
-          id: 'default_user',
-          name: profileData.name || '旅人', 
-          avatar: profileData.avatar || '',
-          exchangeRate: profileData.exchange_rate || 0.22
-        });
+        // 讀取個人資料（含匯率）
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', 'default_user')
+          .single();
+
+        if (profileError) {
+          console.error('Error fetching profile:', profileError);
+        } else if (profileData) {
+          setUserProfile({ 
+            id: 'default_user',
+            name: profileData.name || '旅人', 
+            avatar: profileData.avatar || '',
+            exchangeRate: profileData.exchange_rate || 0.22
+          });
+        }
+
+        // 抓取旅程
+        const { data: tripsData, error: tripsError } = await supabase.from('trips').select('*').order('created_at', { ascending: true });
+        if (tripsError) {
+          console.error('Error fetching trips:', tripsError);
+          setTrips([]);
+        } else {
+          const fetchedTrips = tripsData || [];
+          setTrips(fetchedTrips);
+
+          const tripIds = fetchedTrips.map(t => t.id);
+          if (tripIds.length > 0) {
+            // 並行抓取所有相關資料
+            const [eventsRes, expensesRes, bookingsRes, checklistsRes] = await Promise.all([
+              supabase.from('events').select('*').in('trip_id', tripIds),
+              supabase.from('expenses').select('*').in('trip_id', tripIds),
+              supabase.from('bookings').select('*').in('trip_id', tripIds),
+              supabase.from('checklists').select('*').in('trip_id', tripIds),
+            ]);
+
+            // 檢查每一個抓取的錯誤
+            if (eventsRes.error) console.error('Error fetching events:', eventsRes.error);
+            if (expensesRes.error) console.error('Error fetching expenses:', expensesRes.error);
+            if (bookingsRes.error) console.error('Error fetching bookings:', bookingsRes.error);
+            if (checklistsRes.error) console.error('Error fetching checklists:', checklistsRes.error);
+
+            const groupById = (data: any[] | null) => (data || []).reduce((acc, item) => {
+              (acc[item.trip_id] = acc[item.trip_id] || []).push(item);
+              return acc;
+            }, {});
+
+            setAllEvents(groupById(eventsRes.data));
+            setAllExpenses(groupById(expensesRes.data));
+            setAllBookings(groupById(bookingsRes.data));
+            setAllChecklists(groupById(checklistsRes.data));
+          }
+        }
+      } catch (error) {
+        console.error('An unexpected error occurred during data fetching:', error);
+      } finally {
+        setLoading(false);
       }
-
-      const { data: tripsData } = await supabase.from('trips').select('*').order('created_at', { ascending: true });
-      const trips = tripsData || [];
-      setTrips(trips);
-      
-      const tripIds = trips.map(t => t.id);
-      if (tripIds.length > 0) {
-        const [eventsRes, expensesRes, bookingsRes, checklistsRes] = await Promise.all([
-          supabase.from('events').select('*').in('trip_id', tripIds),
-          supabase.from('expenses').select('*').in('trip_id', tripIds),
-          supabase.from('bookings').select('*').in('trip_id', tripIds),
-          supabase.from('checklists').select('*').in('trip_id', tripIds),
-        ]);
-
-        const groupById = (data: any[] | null) => (data || []).reduce((acc, item) => {
-          (acc[item.trip_id] = acc[item.trip_id] || []).push(item);
-          return acc;
-        }, {});
-
-        setAllEvents(groupById(eventsRes.data));
-        setAllExpenses(groupById(expensesRes.data));
-        setAllBookings(groupById(bookingsRes.data));
-        setAllChecklists(groupById(checklistsRes.data));
-      }
-      setLoading(false);
     };
     fetchData();
   }, []);

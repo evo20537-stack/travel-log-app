@@ -8,7 +8,6 @@ import { useLocationWeather } from '../hooks/useLocationWeather';
 import Header from '../components/Dashboard/Header';
 import TripList from '../components/Dashboard/TripList';
 import WeatherCard from '../components/Dashboard/WeatherCard';
-import AddAdventureCard from '../components/Dashboard/AddAdventureCard';
 import TripModal from '../components/Dashboard/TripModal';
 import ProfileModal from '../components/Dashboard/ProfileModal';
 import Card from '../components/ui/Card';
@@ -146,7 +145,6 @@ const Dashboard: React.FC<DashboardProps> = ({
           error={weatherError} 
           onRefetch={refetchWeather} 
         />
-        <AddAdventureCard onStartPlanning={handleStartPlanning} />
       </div>
 
       <div className="pt-2">

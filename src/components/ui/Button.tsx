@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/utils';
+import { Slot } from '@radix-ui/react-slot';
 
 const buttonVariants = cva(
     'rounded-xl font-bold flex items-center justify-center gap-2 transition-transform active:scale-95 disabled:opacity-50 disabled:active:scale-100',
@@ -28,19 +28,26 @@ const buttonVariants = cva(
 );
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+    asChild?: boolean;
     icon?: React.ReactNode;
 }
 
-const Button: React.FC<ButtonProps> = ({ className, variant, size, icon, children, ...props }) => {
-    return (
-        <button
-            className={cn(buttonVariants({ variant, size, className }))}
-            {...props}
-        >
-            {icon && <span className="mr-2 h-4 w-4">{icon}</span>}
-            {children}
-        </button>
-    );
-};
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+    ({ className, variant, size, asChild = false, icon, children, ...props }, ref) => {
+        const Comp = asChild ? Slot : 'button';
+        return (
+            <Comp
+                className={cn(buttonVariants({ variant, size, className }))}
+                ref={ref}
+                {...props}
+            >
+                {icon && <span className="mr-2 h-4 w-4">{icon}</span>}
+                {children}
+            </Comp>
+        );
+    }
+);
+
+Button.displayName = 'Button';
 
 export { Button, buttonVariants };
