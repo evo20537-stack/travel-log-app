@@ -4,7 +4,7 @@ import { Button } from '../components/ui/Button';
 import { Trip, Booking } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { format, parseISO } from 'date-fns';
-import { Plane, Building, Ticket, Star, Plus, Trash2, CheckCircle, Clock, Copy, MapPin } from 'lucide-react';
+import { Plane, Building, Ticket, Star, Plus, Trash2, CheckCircle, Clock, Copy, MapPin, X, UploadCloud } from 'lucide-react';
 
 // --- Props 和分類定義 ---
 interface BookingsProps {
@@ -23,8 +23,8 @@ const CATEGORY_MAP: Record<BookingCategory, { icon: React.ElementType, color: st
   '其他': { icon: Star, color: 'bg-stone-100 text-stone-500', verb: '預訂' },
 };
 
-// --- 票券元件 (已更新) ---
-const BookingTicket: React.FC<{ booking: Booking; onEdit: () => void; }> = ({ booking, onEdit }) => {
+// --- 票券元件 ---
+const BookingTicket: React.FC<{ booking: Booking; onEdit: () => void; onViewImage: (url: string) => void; }> = ({ booking, onEdit, onViewImage }) => {
   const config = CATEGORY_MAP[booking.category] || CATEGORY_MAP['其他'];
   const Icon = config.icon;
   const statusConfig = {
@@ -36,6 +36,13 @@ const BookingTicket: React.FC<{ booking: Booking; onEdit: () => void; }> = ({ bo
     e.stopPropagation();
     if (booking.map_url) {
       window.open(booking.map_url, '_blank', 'noopener,noreferrer');
+    }
+  }
+
+  const handleViewImageClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (booking.image_url) {
+      onViewImage(booking.image_url);
     }
   }
 
@@ -67,7 +74,6 @@ const BookingTicket: React.FC<{ booking: Booking; onEdit: () => void; }> = ({ bo
                 </div>
               }
           </div>
-          {/* 撕角 + 預訂碼區塊 */}
           <div className="border-t-2 border-dashed border-stone-200 mt-2"></div>
           <div className="flex justify-between items-center p-3 bg-stone-50 rounded-b-2xl">
               <div className="min-w-0 flex-1">
@@ -90,17 +96,26 @@ const BookingTicket: React.FC<{ booking: Booking; onEdit: () => void; }> = ({ bo
                       <MapPin size={14} /> 地圖
                   </button>
                 }
+                {booking.image_url &&
+                  <button 
+                    onClick={handleViewImageClick}
+                    className="shrink-0 flex items-center gap-2 text-xs font-bold text-purple-500 bg-purple-50 px-3 py-2 rounded-lg hover:bg-purple-100 transition-colors"
+                  >
+                    <Ticket size={14}/> 票根
+                  </button>
+                }
               </div>
           </div>
       </div>
   )
 }
 
-// --- 主元件 (已更新) ---
+// --- 主元件 ---
 const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBookings }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [activeCategory, setActiveCategory] = useState<BookingCategory>('機票');
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<Omit<Booking, 'id' | 'trip_id'>>({
     title: '',
@@ -111,7 +126,19 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
     confirmation_number: '',
     notes: '',
     map_url: '',
+    image_url: '',
   });
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({ ...prev, image_url: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleOpenAdd = () => {
     setEditingBooking(null);
@@ -124,6 +151,7 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
       confirmation_number: '',
       notes: '',
       map_url: '',
+      image_url: '',
     });
     setIsFormOpen(true);
   };
@@ -131,14 +159,8 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
   const handleOpenEdit = (booking: Booking) => {
     setEditingBooking(booking);
     setFormData({
-      title: booking.title,
-      category: booking.category,
-      status: booking.status,
+      ...booking,
       date: booking.date.split('T')[0],
-      end_date: booking.end_date || '',
-      confirmation_number: booking.confirmation_number || '',
-      notes: booking.notes || '',
-      map_url: booking.map_url || '',
     });
     setIsFormOpen(true);
   };
@@ -213,12 +235,12 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
           </div>
         ) : (
           filteredBookings.map(booking => (
-              <BookingTicket key={booking.id} booking={booking} onEdit={() => handleOpenEdit(booking)} />
+              <BookingTicket key={booking.id} booking={booking} onEdit={() => handleOpenEdit(booking)} onViewImage={setViewingImage} />
           ))
         )}
       </div>
 
-      <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title={editingBooking ? `編輯${formData.category}` : `新增${formData.category}`}>\
+      <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title={editingBooking ? `編輯${formData.category}` : `新增${formData.category}`}>
         <form onSubmit={handleSave} className="space-y-4">
           <div>
               <label className="block text-xs font-bold text-stone-600 mb-1">標題</label>
@@ -268,8 +290,25 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
               <input type="url" placeholder="https://maps.app.goo.gl/..." className="w-full p-3 rounded-xl border-2 border-stone-200 font-mono" value={formData.map_url} onChange={e => setFormData({...formData, map_url: e.target.value})} />
            </div>
            <div>
-              <label className="block text-xs font-bold text-stone-600 mb-1">備註 (選填)</label>
-              <textarea rows={3} className="w-full p-3 rounded-xl border-2 border-stone-200 resize-none" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
+              <label className="block text-xs font-bold text-stone-600 mb-1">上傳票券圖片 (選填)</label>
+                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-stone-300 border-dashed rounded-xl bg-stone-50/50">
+                    <div className="space-y-1 text-center">
+                        <UploadCloud className="mx-auto h-12 w-12 text-stone-400" />
+                        <div className="flex text-sm text-stone-600">
+                            <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-orange-600 hover:text-orange-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-orange-500 px-2 py-1">
+                                <span>選擇檔案</span>
+                                <input id="file-upload" type="file" className="sr-only" onChange={handleImageUpload} accept="image/*" />
+                            </label>
+                        </div>
+                        <p className="text-xs text-stone-500">將 QR Code 或票券截圖上傳</p>
+                    </div>
+                </div>
+            {formData.image_url && (
+                <div className="mt-3 relative w-fit mx-auto">
+                    <img src={formData.image_url} alt="Preview" className="h-32 rounded-lg shadow-md" />
+                    <button type="button" onClick={() => setFormData({...formData, image_url: ''})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg"><X size={14} /></button>
+                </div>
+            )}
            </div>
            <div className="flex gap-3 pt-2">
             {editingBooking && <Button type="button" variant="danger" onClick={() => handleDelete(editingBooking.id)} className="mr-auto"><Trash2 size={16} /></Button>}
@@ -278,6 +317,22 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
           </div>
         </form>
       </Modal>
+
+      {viewingImage && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center animate-fade-in p-4"
+          onClick={() => setViewingImage(null)}
+        >
+          <div className="relative">
+            <img 
+              src={viewingImage} 
+              alt="Booking QR Code or Ticket" 
+              className="max-w-[95vw] max-h-[90vh] rounded-2xl bg-white shadow-2xl object-contain"
+              onClick={(e) => e.stopPropagation()} 
+            />
+          </div>
+        </div>
+     )}
     </div>
   );
 };

@@ -54,6 +54,7 @@ export interface Booking {
   notes?: string;
   map_url?: string;
   end_date?: string; // 為住宿功能保留
+  image_url?: string;
 }
 
 export interface ChecklistItem {
