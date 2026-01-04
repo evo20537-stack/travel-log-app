@@ -1,58 +1,87 @@
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Profile } from '../../types';
 import Modal from '../ui/Modal';
 import { Button } from '../ui/Button';
-import { Camera } from 'lucide-react';
 
 interface ProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
-  userName: string;
-  userAvatar: string;
-  onUpdateUserProfile: (data: { name?: string; avatar?: string }) => void;
+  userProfile: Profile;
+  onUpdateUserProfile: (updatedProfile: Omit<Profile, 'id'>) => void;
 }
 
-const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, userName, userAvatar, onUpdateUserProfile }) => {
-  const [profileFormData, setProfileFormData] = useState({ name: userName, avatar: userAvatar });
-  const profileFileRef = useRef<HTMLInputElement>(null);
+const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, userProfile, onUpdateUserProfile }) => {
+  const [formData, setFormData] = useState({
+    username: '',
+    avatar_url: '',
+    exchangeRate: 0.22, // [✨ 修正點] 新增 state
+  });
 
   useEffect(() => {
-    setProfileFormData({ name: userName, avatar: userAvatar });
-  }, [userName, userAvatar, isOpen]);
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfileFormData(prev => ({ ...prev, avatar: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
+    if (isOpen) {
+      setFormData({
+        username: userProfile.username,
+        avatar_url: userProfile.avatar_url,
+        exchangeRate: userProfile.exchangeRate, // 當 modal 開啟時，載入當前匯率
+      });
     }
+  }, [isOpen, userProfile]);
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    onUpdateUserProfile(formData);
+    onClose();
   };
 
-  const handleProfileSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onUpdateUserProfile(profileFormData);
-    onClose();
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'number' ? parseFloat(value) : value,
+    }));
   };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="個人資料設定">
-      <form onSubmit={handleProfileSubmit} className="space-y-6">
-        <div className="flex flex-col items-center">
-          <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-2xl group cursor-pointer" onClick={() => profileFileRef.current?.click()}>
-            <img src={profileFormData.avatar} className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera className="text-white" size={32} /></div>
-          </div>
-          <p className="text-[10px] font-black text-stone-400 mt-4 tracking-widest uppercase">點擊頭像更換照片</p>
-          <input ref={profileFileRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+      <form onSubmit={handleSave} className="space-y-4">
+        <div>
+          <label className="block text-sm font-bold text-stone-600 mb-1">暱稱</label>
+          <input
+            name="username"
+            type="text"
+            className="w-full p-3 rounded-xl border-2 border-stone-200"
+            value={formData.username}
+            onChange={handleChange}
+          />
         </div>
-        <div className="space-y-2">
-          <label className="block text-[10px] font-black text-stone-400 tracking-widest uppercase text-center">旅人名稱</label>
-          <input required className="w-full px-6 py-4 rounded-2xl border-2 border-stone-100 font-black text-2xl text-stone-800 focus:border-orange-400 focus:outline-none text-center" value={profileFormData.name} onChange={e => setProfileFormData({ ...profileFormData, name: e.target.value })} />
+        <div>
+          <label className="block text-sm font-bold text-stone-600 mb-1">頭像 URL</label>
+          <input
+            name="avatar_url"
+            type="url"
+            className="w-full p-3 rounded-xl border-2 border-stone-200"
+            value={formData.avatar_url}
+            onChange={handleChange}
+          />
         </div>
-        <Button type="submit" className="w-full py-4 font-black tracking-widest">確認更新</Button>
+
+        {/* [✨ 修正點] 新增匯率輸入框 */}
+        <div>
+          <label className="block text-sm font-bold text-stone-600 mb-1">預設匯率 (1 JPY = ? TWD)</label>
+          <input
+            name="exchangeRate"
+            type="number"
+            step="0.001"
+            className="w-full p-3 rounded-xl border-2 border-stone-200"
+            value={formData.exchangeRate}
+            onChange={handleChange}
+          />
+        </div>
+
+        <div className="flex justify-end gap-3 pt-4">
+          <Button variant="secondary" type="button" onClick={onClose}>取消</Button>
+          <Button type="submit" className="bg-stone-800 text-white">儲存</Button>
+        </div>
       </form>
     </Modal>
   );

@@ -1,229 +1,278 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import Card from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
-import Modal from '../components/ui/Modal';
-import { Plus, Wallet, Trash2, Utensils, Train, ShoppingBag, BedDouble, Clapperboard, MoreHorizontal } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
 import { Trip, Expense } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
+import { Plus, Trash2, Utensils, Train, Building, ShoppingBag, Film, Star } from 'lucide-react';
+import Modal from '../components/ui/Modal';
+import { Button } from '../components/ui/Button';
 
+// --- Props & 型別定義 ---
 interface ExpensesProps {
   currentTrip: Trip;
   expenses: Expense[];
   onUpdateExpenses: (updatedExpenses: Expense[]) => void;
+  exchangeRates?: { TWD: number }; // 讓 exchangeRates 成為可選的
 }
 
-const CATEGORIES: { id: Expense['category'], label: string, icon: React.ElementType, color: string, darkColor: string }[] = [
-  { id: '餐飲', label: '餐飲', icon: Utensils, color: 'bg-orange-100', darkColor: 'bg-orange-500' },
-  { id: '交通', label: '交通', icon: Train, color: 'bg-blue-100', darkColor: 'bg-blue-500' },
-  { id: '住宿', label: '住宿', icon: BedDouble, color: 'bg-indigo-100', darkColor: 'bg-indigo-500' },
-  { id: '購物', label: '購物', icon: ShoppingBag, color: 'bg-pink-100', darkColor: 'bg-pink-500' },
-  { id: '娛樂', label: '娛樂', icon: Clapperboard, color: 'bg-green-100', darkColor: 'bg-green-500' },
-  { id: '其他', label: '其他', icon: MoreHorizontal, color: 'bg-stone-100', darkColor: 'bg-stone-500' },
-];
+type ExpenseCategory = '餐飲' | '交通' | '住宿' | '購物' | '娛樂' | '其他';
+const EXPENSE_CATEGORIES: ExpenseCategory[] = ['餐飲', '交通', '住宿', '購物', '娛樂', '其他'];
 
-const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpenses }) => {
+const CATEGORY_MAP: Record<ExpenseCategory, { icon: React.ElementType, bgColor: string, borderColor: string, dotColor: string }> = {
+  '餐飲': { icon: Utensils, bgColor: 'bg-amber-100', borderColor: 'border-amber-400', dotColor: 'bg-amber-400' },
+  '交通': { icon: Train, bgColor: 'bg-sky-100', borderColor: 'border-sky-400', dotColor: 'bg-sky-400' },
+  '住宿': { icon: Building, bgColor: 'bg-indigo-100', borderColor: 'border-indigo-400', dotColor: 'bg-indigo-400' },
+  '購物': { icon: ShoppingBag, bgColor: 'bg-purple-100', borderColor: 'border-purple-400', dotColor: 'bg-purple-400' },
+  '娛樂': { icon: Film, bgColor: 'bg-rose-100', borderColor: 'border-rose-400', dotColor: 'bg-rose-400' },
+  '其他': { icon: Star, bgColor: 'bg-stone-200', borderColor: 'border-stone-400', dotColor: 'bg-stone-400' },
+};
+
+// --- 主元件 ---
+const Expenses: React.FC<ExpensesProps> = ({ 
+  currentTrip, 
+  expenses, 
+  onUpdateExpenses, 
+  exchangeRates = { TWD: 0.22 } // [✨ 修正點] 加入預設值
+}) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-  const [exchangeRate, setExchangeRate] = useState<number>(0.22); // 預設匯率
 
   const [formData, setFormData] = useState<Omit<Expense, 'id' | 'trip_id'>>({
     title: '',
     amount: 0,
     category: '餐飲',
     date: new Date().toISOString().split('T')[0],
-    notes: '',
     currency: 'JPY',
+    notes: '',
   });
-
-  useEffect(() => {
-    const fetchRate = async () => {
-      try {
-        const response = await fetch('https://open.er-api.com/v6/latest/JPY');
-        const data = await response.json();
-        if (data.rates && data.rates.TWD) {
-          setExchangeRate(data.rates.TWD);
-        }
-      } catch (error) {
-        console.error("無法獲取匯率，將使用預設值", error);
-      }
-    };
-    fetchRate();
-  }, []);
-
-  const { totalTWD, totalJPY, categoryTotalsInTWD } = useMemo(() => {
-    let twd = 0;
-    let jpy = 0;
-    const catTotals: { [key: string]: number } = {};
-
-    for (const exp of expenses) {
-      const amountInTWD = exp.currency === 'JPY' ? exp.amount * exchangeRate : exp.amount;
-      catTotals[exp.category] = (catTotals[exp.category] || 0) + amountInTWD;
-      
-      if (exp.currency === 'TWD') twd += exp.amount;
-      else jpy += exp.amount;
-    }
-    return { totalTWD: twd, totalJPY: jpy, categoryTotalsInTWD: catTotals };
-  }, [expenses, exchangeRate]);
-
-  const totalCombinedInTWD = totalTWD + totalJPY * exchangeRate;
 
   const handleOpenAdd = () => {
     setEditingExpense(null);
-    setFormData({ title: '', amount: 0, category: '餐飲', date: new Date().toISOString().split('T')[0], currency: 'JPY', notes: '' });
+    setFormData({
+      title: '',
+      amount: 0,
+      category: '餐飲',
+      date: new Date().toISOString().split('T')[0],
+      currency: 'JPY',
+      notes: '',
+    });
     setIsFormOpen(true);
   };
 
   const handleOpenEdit = (expense: Expense) => {
     setEditingExpense(expense);
-    setFormData({ ...expense, notes: expense.notes || '' });
+    setFormData({
+      title: expense.title,
+      amount: expense.amount,
+      category: expense.category,
+      date: expense.date.split('T')[0],
+      currency: expense.currency || 'JPY',
+      notes: expense.notes || '',
+    });
     setIsFormOpen(true);
   };
-
-  // ✨ 修正後的刪除邏輯
+  
   const handleDelete = () => {
-    if (!editingExpense) return; // 如果沒有正在編輯的項目，則不執行
-    if (window.confirm('確定要刪除這筆開銷嗎？')) {
+    if (!editingExpense) return;
+    if (confirm('確定要刪除這筆帳目嗎？')) {
       onUpdateExpenses(expenses.filter(e => e.id !== editingExpense.id));
       setIsFormOpen(false);
-      setEditingExpense(null); // 清理狀態
     }
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title.trim() || !formData.amount) return;
+    if (formData.amount <= 0) {
+      alert('請輸入有效的金額！');
+      return;
+    }
+    const finalTitle = formData.title.trim() === '' ? formData.category : formData.title.trim();
     const newOrUpdatedExpense: Expense = {
       id: editingExpense ? editingExpense.id : uuidv4(),
-      trip_id: currentTrip.id, // 確保 trip_id 被設置
+      trip_id: currentTrip.id,
       ...formData,
-      amount: Number(formData.amount) || 0,
+      title: finalTitle,
     };
-    let updatedList = editingExpense
-      ? expenses.map(ex => ex.id === editingExpense.id ? newOrUpdatedExpense : ex)
+    const updatedList = editingExpense
+      ? expenses.map(e => e.id === editingExpense.id ? newOrUpdatedExpense : e)
       : [...expenses, newOrUpdatedExpense];
     updatedList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     onUpdateExpenses(updatedList);
     setIsFormOpen(false);
-    setEditingExpense(null); // 清理狀態
   };
 
-  const getCategoryConfig = (catId: Expense['category']) => CATEGORIES.find(c => c.id === catId) || CATEGORIES[5];
+  const { totalJPY, totalTWD, totalConvertedToTWD, categoryTotals } = useMemo(() => {
+    const rate = exchangeRates.TWD;
+    let totalJPY = 0;
+    let totalTWD = 0;
+    const categoryTotals: { [key in ExpenseCategory]?: number } = {};
+
+    expenses.forEach(exp => {
+      const amountInTWD = exp.currency === 'JPY' ? exp.amount * rate : exp.amount;
+      if (exp.currency === 'JPY') {
+        totalJPY += exp.amount;
+      } else if (exp.currency === 'TWD') {
+        totalTWD += exp.amount;
+      }
+      
+      const category = exp.category as ExpenseCategory;
+      if (!categoryTotals[category]) {
+        categoryTotals[category] = 0;
+      }
+      categoryTotals[category]! += amountInTWD;
+    });
+
+    const totalConvertedToTWD = totalJPY * rate + totalTWD;
+    return { totalJPY, totalTWD, totalConvertedToTWD, categoryTotals };
+  }, [expenses, exchangeRates]);
+
+  const dailyExpenses = useMemo(() => {
+    const grouped: { [key: string]: Expense[] } = {};
+    expenses.forEach(expense => {
+      const date = expense.date.split('T')[0];
+      if (!grouped[date]) grouped[date] = [];
+      grouped[date].push(expense);
+    });
+    return Object.entries(grouped).sort(([a], [b]) => b.localeCompare(a));
+  }, [expenses]);
+  
+  const getConvertedAmount = (amount: number, currency: string) => {
+    if (currency === 'JPY') {
+      return { amount: amount * exchangeRates.TWD, currency: 'TWD' };
+    }
+    return { amount: amount / exchangeRates.TWD, currency: 'JPY' };
+  };
 
   return (
-    <div className="pb-24 space-y-6 animate-fade-in">
-       <header className="sticky top-0 bg-[#F7F4EB]/80 backdrop-blur-md z-40 pt-2 pb-4 border-b border-stone-200/50">
-         <div className="flex justify-between items-end mb-4">
-          <div>
-              <span className="text-xs font-bold text-stone-500 truncate">{currentTrip.title}</span>
-              <h2 className="text-2xl font-black text-stone-800">旅費總管 💰</h2>
+    <div className="pb-20 animate-fade-in">
+      <header className="p-4 pt-2 sticky top-0 bg-[#F7F4EB]/80 backdrop-blur-md z-40">
+        <div className='flex justify-between items-center mb-4'>
+            <h2 className="text-2xl font-black text-stone-800">旅費總覽</h2>
+            <Button onClick={handleOpenAdd} className="bg-stone-800 text-white rounded-xl shadow-lg shadow-stone-200 shrink-0"><Plus size={20} /></Button>
+        </div>
+
+        <div className="bg-stone-800 text-white rounded-2xl p-5 shadow-lg">
+          <div className="grid grid-cols-2 divide-x divide-stone-600 mb-4">
+            <div className="pr-4">
+              <p className="text-sm text-stone-300">日幣總支出 (JPY)</p>
+              <p className="text-3xl font-black">¥{Math.round(totalJPY).toLocaleString()}</p>
+            </div>
+            <div className="pl-4">
+              <p className="text-sm text-stone-300">台幣總支出 (TWD)</p>
+              <p className="text-3xl font-black">${Math.round(totalConvertedToTWD).toLocaleString()}</p>
+            </div>
           </div>
-          <Button onClick={handleOpenAdd} className="bg-stone-800 text-white rounded-xl shadow-lg shadow-stone-200 shrink-0"><Plus size={20} /></Button>
+          <hr className="border-stone-600 mb-3" />
+          <p className="text-xs text-stone-400 mb-2">消費種類分佈 (已換算為台幣)</p>
+          <div className="w-full flex h-3 rounded-full overflow-hidden mb-3">
+            {Object.entries(categoryTotals).map(([cat, amount]) => (
+              <div key={cat}
+                   className={CATEGORY_MAP[cat as ExpenseCategory]?.dotColor || 'bg-stone-400'}
+                   style={{ width: `${(amount / totalConvertedToTWD) * 100}%` }} />
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            {Object.entries(categoryTotals).sort(([,a], [,b]) => b - a).map(([cat, amount]) => (
+              <div key={cat} className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${CATEGORY_MAP[cat as ExpenseCategory]?.dotColor || 'bg-stone-400'}`} />
+                  <span className="text-stone-300">{cat}</span>
+                </div>
+                <span className="font-semibold text-stone-200">${Math.round(amount).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </header>
 
-      <Card className="bg-gradient-to-br from-stone-800 to-stone-900 text-white shadow-2xl shadow-stone-200">
-        <div className="grid grid-cols-2 gap-4 divide-x divide-white/20">
-          <div className="pr-4">
-             <p className="text-sm font-bold text-white/60">日幣總支出 (JPY)</p>
-             <p className="text-3xl font-black tracking-tight"><span className="font-normal">¥</span>{Math.round(totalJPY).toLocaleString()}</p>
-          </div>
-          <div className="pl-4">
-             <p className="text-sm font-bold text-white/60">台幣總支出 (TWD)</p>
-             <p className="text-3xl font-black tracking-tight"><span className="font-normal">$</span>{Math.round(totalTWD).toLocaleString()}</p>
-          </div>
-        </div>
-        
-        {totalCombinedInTWD > 0 && (
-            <div className="mt-6 pt-4 border-t border-white/20">
-              <p className="text-center text-xs text-white/60 font-bold mb-2">消費種類分佈 (已換算為台幣)</p>
-              <div className="flex h-3 w-full bg-black/20 rounded-full overflow-hidden mb-3">
-              {CATEGORIES.map(cat => {
-                  const percent = (categoryTotalsInTWD[cat.id] || 0) / totalCombinedInTWD * 100;
-                  if (percent === 0) return null;
-                  return <div key={cat.id} className={cat.darkColor} style={{ width: `${percent}%` }} />
+      <main className="px-4 mt-4 space-y-4">
+        <h3 className="font-bold text-stone-500 text-sm">帳目明細 ({expenses.length})</h3>
+        {dailyExpenses.map(([date, dayExpenses]) => (
+          <div key={date}>
+            <h4 className="font-black text-stone-700 text-lg mb-2">{format(parseISO(date), 'MM / dd (E)')}</h4>
+            <div className="space-y-3">
+              {dayExpenses.map(expense => {
+                const config = CATEGORY_MAP[expense.category as ExpenseCategory] || CATEGORY_MAP['其他'];
+                const Icon = config.icon;
+                const converted = getConvertedAmount(expense.amount, expense.currency);
+
+                return (
+                  <div key={expense.id} onClick={() => handleOpenEdit(expense)} 
+                       className={`bg-white shadow-md rounded-2xl flex items-stretch gap-4 cursor-pointer active:scale-[0.98] transition-transform overflow-hidden border-l-4 ${config.borderColor}`}>
+                    <div className={`w-16 flex-shrink-0 flex items-center justify-center ${config.bgColor}`}>
+                      <Icon size={24} className={config.borderColor.replace('border-', 'text-')} />
+                    </div>
+                    <div className="flex-1 py-3 pr-4 flex justify-between items-center min-w-0">
+                        <div className='min-w-0'>
+                           <p className="font-bold text-stone-800 truncate">{expense.title}</p>
+                           <p className="text-xs font-semibold text-stone-400">{format(parseISO(expense.date), 'yyyy-MM-dd')}</p>
+                        </div>
+                        <div className="text-right shrink-0 ml-2">
+                           <p className="font-black text-lg text-sky-600">
+                             {expense.currency === 'JPY' ? '¥' : '$'}{expense.amount.toLocaleString()}
+                           </p>
+                           <p className="text-xs font-bold text-stone-400">
+                             ≈ {converted.currency === 'JPY' ? '¥' : '$'}{Math.round(converted.amount).toLocaleString()}
+                           </p>
+                        </div>
+                    </div>
+                  </div>
+                )
               })}
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                  {Object.entries(categoryTotalsInTWD).sort(([,a],[,b]) => b-a).map(([catId, amount]) => (
-                      <div key={catId} className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                              <div className={`w-2 h-2 rounded-full ${getCategoryConfig(catId as any).darkColor}`}></div>
-                              <span className="font-bold text-stone-300">{catId}</span>
-                          </div>
-                          <span className="font-mono font-bold text-stone-400">${Math.round(amount).toLocaleString()}</span>
-                      </div>
-                  ))}
-              </div>
             </div>
-        )}
-      </Card>
-
-      <div className="space-y-3">
-        <h3 className="font-bold text-stone-600 text-sm px-1">帳目明細 ({expenses.length})</h3>
-        {expenses.length === 0 ? (
-          <div className="text-center py-16 opacity-60">
-            <Wallet size={48} className="mx-auto mb-3 text-stone-300" />
-            <p className="font-bold text-stone-500">尚無任何開銷</p>
-             <p className="text-sm text-stone-400 mt-1">點擊右上角記第一筆帳吧！</p>
           </div>
-        ) : (
-          expenses.map((exp) => {
-            const config = getCategoryConfig(exp.category);
-            const isJPY = exp.currency === 'JPY';
-            const convertedAmount = isJPY ? exp.amount * exchangeRate : exp.amount / exchangeRate;
-            return (
-              <Card key={exp.id} className="p-0 group relative overflow-hidden" onClick={() => handleOpenEdit(exp)}>
-                <div className="flex items-center">
-                    <div className={`w-3 h-full absolute left-0 top-0 ${config.color.replace('bg-', 'border-r-4 border-').replace('-100', '-400')}`}></div>
-                    <div className={`w-12 h-12 flex items-center justify-center rounded-lg ${config.color} text-lg ml-6`}><config.icon size={20}/></div>
-                    <div className="flex-1 px-4 min-w-0">
-                        <h4 className="font-bold text-stone-800 truncate">{exp.title}</h4>
-                        <p className="text-xs text-stone-400 font-bold mt-1">{format(new Date(exp.date), 'yyyy-MM-dd')}</p>
-                    </div>
-                    <div className="text-right pl-4 pr-4">
-                        <p className={`font-black text-lg ${isJPY ? 'text-sky-600' : 'text-emerald-600'}`}>{isJPY ? '¥' : '$'}{exp.amount.toLocaleString()}</p>
-                        <p className="text-xs text-stone-400 font-mono">≈ {isJPY ? '¥' : '$'}{Math.round(convertedAmount).toLocaleString()}</p>
-                    </div>
-                </div>
-              </Card>
-            );
-          })
+        ))}
+        {expenses.length === 0 && (
+            <div className="text-center py-10 text-stone-400">
+                <p>點擊上方 + 新增第一筆帳目</p>
+            </div>
         )}
-      </div>
+      </main>
 
-      <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title={editingExpense ? '編輯開銷' : '新增開銷'}>
-         <form onSubmit={handleSave} className="space-y-4">
-            <div className="bg-stone-100 p-1 rounded-full grid grid-cols-2 gap-1">
-                <button type="button" onClick={() => setFormData(f => ({...f, currency: 'JPY'}))} className={`py-2 text-sm font-bold rounded-full ${formData.currency === 'JPY' ? 'bg-white shadow-sm' : 'text-stone-500'}`}>日幣 (JPY)</button>
-                <button type="button" onClick={() => setFormData(f => ({...f, currency: 'TWD'}))} className={`py-2 text-sm font-bold rounded-full ${formData.currency === 'TWD' ? 'bg-white shadow-sm' : 'text-stone-500'}`}>台幣 (TWD)</button>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-stone-600 mb-1">項目</label>
-              <input required placeholder='晚餐：函館朝市海鮮丼' className="w-full p-3 rounded-xl border-2 border-stone-200" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})}/>
-           </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-xs font-bold text-stone-600 mb-1">金額 ({formData.currency})</label>
-                    <input required type="number" inputMode="numeric" placeholder='3000' className="w-full p-3 rounded-xl border-2 border-stone-200" value={formData.amount === 0 ? '' : formData.amount} onChange={e => setFormData({...formData, amount: Number(e.target.value)})} />
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-stone-600 mb-1">日期</label>
-                    <input required type="date" className="w-full p-3 rounded-xl border-2 border-stone-200 bg-white" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
-                </div>
-            </div>
+      <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title={editingExpense ? "編輯帳目" : "新增帳目"}>
+        <form onSubmit={handleSave} className="space-y-5">
            <div>
-                <label className="block text-xs font-bold text-stone-600 mb-1">類別</label>
-                <select className="w-full p-3 rounded-xl border-2 border-stone-200 bg-white" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value as Expense['category']})}>
-                    {CATEGORIES.map(cat => <option key={cat.id}>{cat.label}</option>)}
+            <label className="block text-xs font-bold text-stone-600 mb-2">類別</label>
+            <div className="grid grid-cols-3 gap-3">
+              {EXPENSE_CATEGORIES.map(cat => {
+                const config = CATEGORY_MAP[cat];
+                const Icon = config.icon;
+                const isSelected = formData.category === cat;
+                return (
+                  <button type="button" key={cat} onClick={() => setFormData({...formData, category: cat})}
+                    className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-2 font-bold transition-all ${isSelected ? 'bg-white border-stone-800 shadow-md scale-105' : 'bg-stone-50 border-stone-200 text-stone-500 hover:border-stone-400'}`}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${config.bgColor}`}><Icon size={20} /></div>
+                    <span>{cat}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+           <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-stone-600 mb-1">幣別</label>
+                <select required className="w-full p-3 rounded-xl border-2 border-stone-200 bg-white font-bold" value={formData.currency} onChange={e => setFormData({...formData, currency: e.target.value })}>
+                    <option value="JPY">JPY (¥)</option>
+                    <option value="TWD">TWD ($)</option>
                 </select>
-            </div>
-           <div>
-              <label className="block text-xs font-bold text-stone-600 mb-1">備註 (選填)</label>
-              <textarea rows={2} className="w-full p-3 rounded-xl border-2 border-stone-200 resize-none" value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-stone-600 mb-1">金額</label>
+                <input type="number" required placeholder="0" className="w-full p-3 rounded-xl border-2 border-stone-200 font-bold text-stone-800" value={formData.amount} onChange={e => setFormData({...formData, amount: parseInt(e.target.value) || 0})} />
+              </div>
            </div>
+           <div>
+            <label className="block text-xs font-bold text-stone-600 mb-1">品項 (選填)</label>
+            <input placeholder="買了什麼？（可留白）" className="w-full p-3 rounded-xl border-2 border-stone-200 font-bold text-stone-800" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+          </div>
+          <div>
+              <label className="block text-xs font-bold text-stone-600 mb-1">備註 (選填)</label>
+              <textarea rows={2} placeholder="地點、用途或其他說明..." className="w-full p-3 rounded-xl border-2 border-stone-200 resize-none" value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} />
+           </div>
+           <div>
+              <label className="block text-xs font-bold text-stone-600 mb-1">日期</label>
+              <input type="date" required className="w-full p-3 rounded-xl border-2 border-stone-200 bg-white font-bold" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})}/>
+            </div>
            <div className="flex gap-3 pt-2">
-            {/* ✨ 修正後的刪除按鈕 */}
             {editingExpense && <Button type="button" variant="danger" onClick={handleDelete} className="mr-auto"><Trash2 size={16} /></Button>}
             <Button variant="secondary" type="button" onClick={() => setIsFormOpen(false)}>取消</Button>
             <Button type="submit" className="bg-stone-800 text-white">儲存</Button>
