@@ -2,9 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import Card from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-// ✨ 更新 Icon 引入
 import { Plus, Wallet, Trash2, Utensils, Train, Building, ShoppingBag, Film, Star } from 'lucide-react'; 
-import { Trip, Expense } from '../types';
+import { Trip, Expense, ExpenseCategory } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { format } from 'date-fns';
 
@@ -14,8 +13,7 @@ interface ExpensesProps {
   onUpdateExpenses: (updatedExpenses: Expense[]) => void;
 }
 
-// ✨ 更新 Icon 對應
-const CATEGORIES: { id: Expense['category'], label: string, icon: React.ElementType, color: string, darkColor: string }[] = [
+const CATEGORIES: { id: ExpenseCategory, label: string, icon: React.ElementType, color: string, darkColor: string }[] = [
   { id: '餐飲', label: '餐飲', icon: Utensils, color: 'bg-orange-100', darkColor: 'bg-orange-500' },
   { id: '交通', label: '交通', icon: Train, color: 'bg-blue-100', darkColor: 'bg-blue-500' },
   { id: '住宿', label: '住宿', icon: Building, color: 'bg-indigo-100', darkColor: 'bg-indigo-500' },
@@ -109,7 +107,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
     setEditingExpense(null);
   };
 
-  const getCategoryConfig = (catId: Expense['category']) => CATEGORIES.find(c => c.id === catId) || CATEGORIES[5];
+  const getCategoryConfig = (catId: ExpenseCategory) => CATEGORIES.find(c => c.id === catId) || CATEGORIES[5];
 
   return (
     <div className="pb-24 space-y-6 animate-fade-in">
@@ -149,7 +147,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
                   {Object.entries(categoryTotalsInTWD).sort(([,a],[,b]) => b-a).map(([catId, amount]) => (
                       <div key={catId} className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                              <div className={`w-2 h-2 rounded-full ${getCategoryConfig(catId as any).darkColor}`}></div>
+                              <div className={`w-2 h-2 rounded-full ${getCategoryConfig(catId as ExpenseCategory).darkColor}`}></div>
                               <span className="font-bold text-stone-300">{catId}</span>
                           </div>
                           <span className="font-mono font-bold text-stone-400">${Math.round(amount).toLocaleString()}</span>
@@ -184,7 +182,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
                     </div>
                     <div className="text-right pl-4 pr-4">
                         <p className={`font-black text-lg ${isJPY ? 'text-sky-600' : 'text-emerald-600'}`}>{isJPY ? '¥' : '$'}{exp.amount.toLocaleString()}</p>
-                        <p className="text-xs text-stone-400 font-mono">≈ {isJPY ? '¥' : '$'}{Math.round(convertedAmount).toLocaleString()}</p>
+                        <p className="text-xs text-stone-400 font-mono">≈ {isJPY ? 'TWD' : 'JPY'} ${Math.round(convertedAmount).toLocaleString()}</p>
                     </div>
                 </div>
               </Card>
@@ -214,7 +212,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
                 </div>
             </div>
            
-           {/* ✨ [修改處] 將 Select 改為 Icon Buttons */}
+           {/* ✨ [修正處] 將 Select 改為 Icon Buttons */}
            <div>
               <label className="block text-xs font-bold text-stone-600 mb-2">類別</label>
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
@@ -239,7 +237,8 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
 
            <div>
               <label className="block text-xs font-bold text-stone-600 mb-1">備註 (選填)</label>
-              <textarea rows={2} className="w-full p-3 rounded-xl border-2 border-stone-200 resize-none" value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.gittarget.value})} />
+              {/* ✨ [修正處] 修正 Typo: e.gittarget -> e.target */}
+              <textarea rows={2} className="w-full p-3 rounded-xl border-2 border-stone-200 resize-none" value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} />
            </div>
            <div className="flex gap-3 pt-2">
             {editingExpense && <Button type="button" variant="danger" onClick={handleDelete} className="mr-auto"><Trash2 size={16} /></Button>}
