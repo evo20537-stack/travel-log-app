@@ -45,6 +45,7 @@ export interface Booking {
   category: '機票' | '住宿' | '票券' | '其他'; // 更新分類
   status: '已完成' | '待處理';
   date: string;
+  end_date?: string; // << 新增：住宿的退房日期
   confirmation_number?: string;
   notes?: string;
   map_url?: string;
