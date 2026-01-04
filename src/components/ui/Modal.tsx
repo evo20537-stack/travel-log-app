@@ -12,7 +12,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center px-4 pt-10 pb-24" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-stretch px-4 pt-6 pb-20" onClick={onClose}>
       <div 
         className="bg-[#F7F4EB] w-full max-w-2xl rounded-3xl shadow-lg flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
@@ -23,7 +23,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
             <X size={20} />
           </button>
         </header>
-        <div className="overflow-y-auto p-5">
+        <div className="overflow-y-auto overflow-x-hidden p-5">
           {children}
         </div>
       </div>
