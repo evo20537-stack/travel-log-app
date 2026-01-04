@@ -47,6 +47,7 @@ export interface Booking {
   date: string;
   confirmation_number?: string;
   notes?: string;
+  map_url?: string;
 }
 
 // --- ChecklistItem 型別已升級 ---

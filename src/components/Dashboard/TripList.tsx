@@ -20,6 +20,8 @@ const TripList: React.FC<TripListProps> = ({ trips, currentTripId, onTripChange,
   // 當 currentTripId 改變時，自動捲動到選定的項目
   useEffect(() => {
     const selectedTripIndex = trips.findIndex(t => t.id === currentTripId);
+    if (selectedTripIndex === -1) return;
+
     const selectedTripElement = tripRefs.current[selectedTripIndex];
     if (selectedTripElement && scrollContainerRef.current) {
       setIsAutoSwitching(true);
@@ -31,12 +33,13 @@ const TripList: React.FC<TripListProps> = ({ trips, currentTripId, onTripChange,
         behavior: 'smooth',
       });
       
-      // 設定一個延遲，在捲動動畫結束後才將 isAutoSwitching 設回 false
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         setIsAutoSwitching(false);
-      }, 1000); // 這裡的延遲時間需要比捲動動畫時間長
+      }, 1000); // 動畫時間約 500ms，給予更長的時間確保動畫結束
+
+      return () => clearTimeout(timer);
     }
-  }, [currentTripId, trips]);
+  }, [currentTripId]); // 💥 修正：只在 currentTripId 改變時觸發
 
   // 處理手動捲動停止後的自動選取
   const handleScroll = useCallback(() => {
@@ -65,7 +68,7 @@ const TripList: React.FC<TripListProps> = ({ trips, currentTripId, onTripChange,
         }
       });
 
-      if (closestIndex !== -1 && trips[closestIndex].id !== currentTripId) {
+      if (closestIndex !== -1 && trips[closestIndex]?.id !== currentTripId) {
         onTripChange(trips[closestIndex].id);
       }
     }, 150); // 150ms 的延遲，判斷使用者是否停止捲動
@@ -75,7 +78,7 @@ const TripList: React.FC<TripListProps> = ({ trips, currentTripId, onTripChange,
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (container) {
-      container.addEventListener('scroll', handleScroll);
+      container.addEventListener('scroll', handleScroll, { passive: true });
       return () => container.removeEventListener('scroll', handleScroll);
     }
   }, [handleScroll]);

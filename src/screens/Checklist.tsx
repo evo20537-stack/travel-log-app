@@ -73,7 +73,8 @@ const Checklist: React.FC<ChecklistProps> = ({ currentTrip, checklist, onUpdateC
 
   const filteredItems = useMemo(() => {
     const sorted = [...checklist].sort((a, b) => (a.is_completed ? 1 : -1) - (b.is_completed ? 1 : -1));
-    return sorted.filter(item => item.category === activeCategory);
+    // 💥 修正：比對前移除 category 的前後空白，確保能正確匹配
+    return sorted.filter(item => item.category?.trim() === activeCategory);
   }, [checklist, activeCategory]);
 
   // --- 語法修正：將 Icon 元件賦值給大寫字母開頭的變數 ---

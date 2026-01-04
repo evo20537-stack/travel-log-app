@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Trip, ScheduleEvent } from '../types';
 import { format, parseISO, isSameDay } from 'date-fns';
+import { v4 as uuidv4 } from 'uuid';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -183,7 +184,7 @@ const Schedule: React.FC<ScheduleProps> = ({ currentTrip, events, onUpdateEvents
     if (editingEvent) {
       updatedList = localEvents.map(ev => ev.id === editingEvent.id ? { ...ev, ...newEvent, id: ev.id } : ev);
     } else {
-      updatedList = [...localEvents, { ...newEvent, id: 'new-' + Date.now() }];
+      updatedList = [...localEvents, { ...newEvent, id: uuidv4() }];
     }
     updatedList.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     onUpdateEvents(updatedList);

@@ -4,7 +4,7 @@ import { Button } from '../components/ui/Button';
 import { Trip, Booking } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { format, parseISO } from 'date-fns';
-import { Plane, BedDouble, Ticket, MoreHorizontal, Plus, Edit2, Trash2, CheckCircle, Clock, Copy, CalendarPlus, Building, Train, Star } from 'lucide-react';
+import { Plane, BedDouble, Ticket, MoreHorizontal, Plus, Edit2, Trash2, CheckCircle, Clock, Copy, CalendarPlus, Building, Train, Star, MapPin } from 'lucide-react';
 
 // --- 全新的 Props 和分類定義 ---
 interface BookingsProps {
@@ -58,6 +58,13 @@ const BookingTicket: React.FC<{ booking: Booking; onEdit: () => void; }> = ({ bo
       '待處理': { text: '待確認', color: 'bg-yellow-100 text-yellow-700', icon: <Clock size={14}/> }
   }
 
+  const handleMapClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (booking.map_url) {
+      window.open(booking.map_url, '_blank', 'noopener,noreferrer');
+    }
+  }
+
   return (
       <div onClick={onEdit} className="cursor-pointer group bg-white shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-2xl flex flex-col active:scale-[0.98]">
           <div className="p-4 flex-1">
@@ -92,12 +99,22 @@ const BookingTicket: React.FC<{ booking: Booking; onEdit: () => void; }> = ({ bo
                           ><Copy size={14} /></button>}
                   </div>
               </div>
-              <button 
-                onClick={(e) => { e.stopPropagation(); generateICS(booking); }}
-                className="ml-3 shrink-0 flex items-center gap-2 text-xs font-bold text-indigo-500 bg-indigo-50 px-3 py-2 rounded-lg hover:bg-indigo-100 transition-colors"
-              >
-                  <CalendarPlus size={14} /> 新增至行事曆
-              </button>
+              <div className="flex items-center gap-2">
+                {booking.map_url &&
+                  <button 
+                    onClick={handleMapClick}
+                    className="shrink-0 flex items-center gap-2 text-xs font-bold text-cyan-500 bg-cyan-50 px-3 py-2 rounded-lg hover:bg-cyan-100 transition-colors"
+                  >
+                      <MapPin size={14} /> 地圖
+                  </button>
+                }
+                <button 
+                  onClick={(e) => { e.stopPropagation(); generateICS(booking); }}
+                  className="shrink-0 flex items-center gap-2 text-xs font-bold text-indigo-500 bg-indigo-50 px-3 py-2 rounded-lg hover:bg-indigo-100 transition-colors"
+                >
+                    <CalendarPlus size={14} />
+                </button>
+              </div>
           </div>
       </div>
   )
@@ -116,6 +133,7 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
     date: new Date().toISOString().split('T')[0],
     confirmation_number: '',
     notes: '',
+    map_url: '',
   });
 
   const handleOpenAdd = () => {
@@ -127,6 +145,7 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
       date: new Date().toISOString().split('T')[0],
       confirmation_number: '',
       notes: '',
+      map_url: '',
     });
     setIsFormOpen(true);
   };
@@ -140,6 +159,7 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
       date: booking.date.split('T')[0],
       confirmation_number: booking.confirmation_number || '',
       notes: booking.notes || '',
+      map_url: booking.map_url || '',
     });
     setIsFormOpen(true);
   };
@@ -215,6 +235,7 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
         )}
       </div>
 
+      {/* 💥 語法修正：補上缺失的 closing backtick */}
       <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title={editingBooking ? `編輯${formData.category}` : `新增${formData.category}`}>
         <form onSubmit={handleSave} className="space-y-4">
           <div>
@@ -244,6 +265,10 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
            <div>
               <label className="block text-xs font-bold text-stone-600 mb-1">預訂編號 (選填)</label>
               <input className="w-full p-3 rounded-xl border-2 border-stone-200 font-mono" value={formData.confirmation_number} onChange={e => setFormData({...formData, confirmation_number: e.target.value})} />
+           </div>
+           <div>
+              <label className="block text-xs font-bold text-stone-600 mb-1">地圖連結 (選填)</label>
+              <input type="url" placeholder="https://maps.app.goo.gl/..." className="w-full p-3 rounded-xl border-2 border-stone-200 font-mono" value={formData.map_url} onChange={e => setFormData({...formData, map_url: e.target.value})} />
            </div>
            <div>
               <label className="block text-xs font-bold text-stone-600 mb-1">備註 (選填)</label>
