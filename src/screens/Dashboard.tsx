@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   MapPin, Sun, Calendar as CalendarIcon, RotateCcw, X, Map, Wallet, CheckCircle, AlertTriangle, Navigation
 } from 'lucide-react';
-import { Trip, AppTab, ScheduleEvent, Expense } from '../types';
+import { Trip, AppTab, ScheduleEvent, Expense, Profile } from '../types';
 import { useLocationWeather } from '../hooks/useLocationWeather';
 
 import Header from '../components/Dashboard/Header';
@@ -22,9 +22,8 @@ interface DashboardProps {
   onEditTrip: (id: string, data: Partial<Trip>) => void;
   onDeleteTrip: (id: string) => void;
   onNavigateTab: (tab: AppTab) => void;
-  userName: string;
-  userAvatar: string;
-  onUpdateUserProfile: (data: { name?: string; avatar?: string }) => void;
+  userProfile: Profile;
+  onUpdateUserProfile: (data: Omit<Profile, 'id'>) => void;
   events: ScheduleEvent[];
   completedEventIds: Set<string>;
   onCompleteEvent: (id: string) => void;
@@ -34,13 +33,13 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({
   trips, currentTripId, onTripChange, onAddTrip, onEditTrip, onDeleteTrip, onNavigateTab,
-  userName, userAvatar, onUpdateUserProfile,
+  userProfile,
+  onUpdateUserProfile,
   events, completedEventIds, onCompleteEvent, onUndoCompleteEvent, expenses
 }) => {
   const [isTripModalOpen, setIsTripModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
-  const [initialTripDate, setInitialTripDate] = useState<Date | undefined>();
 
   const { weatherData, locationName, isLoading: isWeatherLoading, error: weatherError, refetch: refetchWeather } = useLocationWeather();
 
@@ -68,7 +67,6 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   const handleAddTripClick = () => {
     setEditingTrip(null);
-    setInitialTripDate(undefined); // 清除預設日期
     setIsTripModalOpen(true);
   }
 
@@ -79,7 +77,6 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   const handleStartPlanning = (date: Date) => {
     setEditingTrip(null);
-    setInitialTripDate(date);
     setIsTripModalOpen(true);
   };
 
@@ -87,8 +84,8 @@ const Dashboard: React.FC<DashboardProps> = ({
     return (
       <div className="space-y-6 pb-24 animate-fade-in relative">
         <Header 
-          userName={userName} 
-          userAvatar={userAvatar} 
+          userName={userProfile.name} 
+          userAvatar={userProfile.avatar} 
           tripsLength={trips.length} 
           onProfileClick={() => setIsProfileModalOpen(true)} 
           onAddTripClick={handleAddTripClick} 
@@ -104,13 +101,11 @@ const Dashboard: React.FC<DashboardProps> = ({
           onAddTrip={onAddTrip}
           onEditTrip={onEditTrip}
           onDeleteTrip={onDeleteTrip}
-          initialDate={initialTripDate}
         />
         <ProfileModal 
           isOpen={isProfileModalOpen} 
           onClose={() => setIsProfileModalOpen(false)} 
-          userName={userName} 
-          userAvatar={userAvatar} 
+          userProfile={userProfile} 
           onUpdateUserProfile={onUpdateUserProfile} 
         />
       </div>
@@ -129,8 +124,8 @@ const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       <Header 
-        userName={userName} 
-        userAvatar={userAvatar} 
+        userName={userProfile.name} 
+        userAvatar={userProfile.avatar} 
         tripsLength={trips.length} 
         onProfileClick={() => setIsProfileModalOpen(true)} 
         onAddTripClick={handleAddTripClick}
@@ -207,13 +202,11 @@ const Dashboard: React.FC<DashboardProps> = ({
         onAddTrip={onAddTrip}
         onEditTrip={onEditTrip}
         onDeleteTrip={onDeleteTrip}
-        initialDate={initialTripDate}
       />
       <ProfileModal 
         isOpen={isProfileModalOpen} 
         onClose={() => setIsProfileModalOpen(false)} 
-        userName={userName} 
-        userAvatar={userAvatar} 
+        userProfile={userProfile} 
         onUpdateUserProfile={onUpdateUserProfile} 
       />
     </div>

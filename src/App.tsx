@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import BottomNav from './components/BottomNav'; // 修正路徑
+import BottomNav from './components/BottomNav';
 import Dashboard from './screens/Dashboard';
 import Schedule from './screens/Schedule';
 import Expenses from './screens/Expenses';
@@ -105,10 +105,8 @@ const App: React.FC = () => {
           currentTripId={currentTripId} 
           onAddTrip={async (data) => { /* 實作 AddTrip */ }}
           onNavigateTab={setActiveTab} 
-          userName={userProfile.name} 
-          userAvatar={userProfile.avatar} 
-          onUpdateUserProfile={handleUpdateUserProfile} 
           userProfile={userProfile}
+          onUpdateUserProfile={handleUpdateUserProfile} 
           events={[]} expenses={[]} onTripChange={setCurrentTripId} onEditTrip={()=>{}} onDeleteTrip={()=>{}} completedEventIds={new Set()} onCompleteEvent={()=>{}} onUndoCompleteEvent={()=>{}}
         />
       );
@@ -124,7 +122,7 @@ const App: React.FC = () => {
 
     switch (activeTab) {
       case AppTab.DASHBOARD: 
-        return <Dashboard {...commonProps} trips={trips} currentTripId={currentTripId} onTripChange={setCurrentTripId} onNavigateTab={setActiveTab} userName={userProfile.name} userAvatar={userProfile.avatar} userProfile={userProfile} onUpdateUserProfile={handleUpdateUserProfile} completedEventIds={completedEventIds} onCompleteEvent={(id)=>setCompletedEventIds(prev=>new Set(prev).add(id))} onUndoCompleteEvent={(id)=>setCompletedEventIds(prev=>{const n=new Set(prev);n.delete(id);return n;})} onAddTrip={()=>{}} onEditTrip={()=>{}} onDeleteTrip={()=>{}} />;
+        return <Dashboard {...commonProps} trips={trips} currentTripId={currentTripId} onTripChange={setCurrentTripId} onNavigateTab={setActiveTab} userProfile={userProfile} onUpdateUserProfile={handleUpdateUserProfile} completedEventIds={completedEventIds} onCompleteEvent={(id)=>setCompletedEventIds(prev=>new Set(prev).add(id))} onUndoCompleteEvent={(id)=>setCompletedEventIds(prev=>{const n=new Set(prev);n.delete(id);return n;})} onAddTrip={()=>{}} onEditTrip={()=>{}} onDeleteTrip={()=>{}} />;
       case AppTab.SCHEDULE: return <Schedule {...commonProps} onUpdateEvents={createUpdateHandler(setAllEvents, 'events')} />;
       case AppTab.BOOKINGS: return <Bookings {...commonProps} onUpdateBookings={createUpdateHandler(setAllBookings, 'bookings')} />;
       case AppTab.EXPENSES: return <Expenses {...commonProps} onUpdateExpenses={createUpdateHandler(setAllExpenses, 'expenses')} exchangeRates={{ TWD: userProfile.exchangeRate }} />;

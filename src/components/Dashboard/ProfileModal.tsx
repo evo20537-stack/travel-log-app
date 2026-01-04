@@ -12,17 +12,17 @@ interface ProfileModalProps {
 
 const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, userProfile, onUpdateUserProfile }) => {
   const [formData, setFormData] = useState({
-    username: '',
-    avatar_url: '',
-    exchangeRate: 0.22, // [✨ 修正點] 新增 state
+    name: '',
+    avatar: '',
+    exchangeRate: 0.22,
   });
 
   useEffect(() => {
     if (isOpen) {
       setFormData({
-        username: userProfile.username,
-        avatar_url: userProfile.avatar_url,
-        exchangeRate: userProfile.exchangeRate, // 當 modal 開啟時，載入當前匯率
+        name: userProfile.name,
+        avatar: userProfile.avatar,
+        exchangeRate: userProfile.exchangeRate,
       });
     }
   }, [isOpen, userProfile]);
@@ -47,25 +47,24 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, userProfil
         <div>
           <label className="block text-sm font-bold text-stone-600 mb-1">暱稱</label>
           <input
-            name="username"
+            name="name"
             type="text"
             className="w-full p-3 rounded-xl border-2 border-stone-200"
-            value={formData.username}
+            value={formData.name}
             onChange={handleChange}
           />
         </div>
         <div>
           <label className="block text-sm font-bold text-stone-600 mb-1">頭像 URL</label>
           <input
-            name="avatar_url"
+            name="avatar"
             type="url"
             className="w-full p-3 rounded-xl border-2 border-stone-200"
-            value={formData.avatar_url}
+            value={formData.avatar}
             onChange={handleChange}
           />
         </div>
 
-        {/* [✨ 修正點] 新增匯率輸入框 */}
         <div>
           <label className="block text-sm font-bold text-stone-600 mb-1">預設匯率 (1 JPY = ? TWD)</label>
           <input

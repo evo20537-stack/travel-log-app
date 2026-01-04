@@ -250,7 +250,7 @@ const Expenses: React.FC<ExpensesProps> = ({
            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-stone-600 mb-1">幣別</label>
-                <select required className="w-full p-3 rounded-xl border-2 border-stone-200 bg-white font-bold" value={formData.currency} onChange={e => setFormData({...formData, currency: e.target.value })}>
+                <select required className="w-full p-3 rounded-xl border-2 border-stone-200 bg-white font-bold" value={formData.currency} onChange={e => setFormData({...formData, currency: e.target.value as 'TWD' | 'JPY'})}>
                     <option value="JPY">JPY (¥)</option>
                     <option value="TWD">TWD ($)</option>
                 </select>

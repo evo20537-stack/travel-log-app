@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, Wand2 } from 'lucide-react';
-import Card from '../../ui/Card'; // 修正路徑
-import { Button } from '../../ui/Button'; // 修正路徑
-import { Popover, PopoverContent, PopoverTrigger } from '../../ui/Popover'; // 修正路徑
-import { Calendar } from '../../ui/Calendar'; // 修正路徑
+import Card from '../ui/Card';
+import { Button } from '../ui/Button';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
+import { Calendar } from '../ui/Calendar';
 
 interface AddAdventureCardProps {
   onStartPlanning: (date: Date) => void;
