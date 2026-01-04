@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import Card from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { Plus, Wallet, Trash2, Utensils, Train, ShoppingBag, BedDouble, Clapperboard, MoreHorizontal } from 'lucide-react';
+// ✨ 更新 Icon 引入
+import { Plus, Wallet, Trash2, Utensils, Train, Building, ShoppingBag, Film, Star } from 'lucide-react'; 
 import { Trip, Expense } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { format } from 'date-fns';
@@ -13,13 +14,14 @@ interface ExpensesProps {
   onUpdateExpenses: (updatedExpenses: Expense[]) => void;
 }
 
+// ✨ 更新 Icon 對應
 const CATEGORIES: { id: Expense['category'], label: string, icon: React.ElementType, color: string, darkColor: string }[] = [
   { id: '餐飲', label: '餐飲', icon: Utensils, color: 'bg-orange-100', darkColor: 'bg-orange-500' },
   { id: '交通', label: '交通', icon: Train, color: 'bg-blue-100', darkColor: 'bg-blue-500' },
-  { id: '住宿', label: '住宿', icon: BedDouble, color: 'bg-indigo-100', darkColor: 'bg-indigo-500' },
+  { id: '住宿', label: '住宿', icon: Building, color: 'bg-indigo-100', darkColor: 'bg-indigo-500' },
   { id: '購物', label: '購物', icon: ShoppingBag, color: 'bg-pink-100', darkColor: 'bg-pink-500' },
-  { id: '娛樂', label: '娛樂', icon: Clapperboard, color: 'bg-green-100', darkColor: 'bg-green-500' },
-  { id: '其他', label: '其他', icon: MoreHorizontal, color: 'bg-stone-100', darkColor: 'bg-stone-500' },
+  { id: '娛樂', label: '娛樂', icon: Film, color: 'bg-green-100', darkColor: 'bg-green-500' },
+  { id: '其他', label: '其他', icon: Star, color: 'bg-stone-100', darkColor: 'bg-stone-500' },
 ];
 
 const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpenses }) => {
@@ -80,13 +82,12 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
     setIsFormOpen(true);
   };
 
-  // ✨ 修正後的刪除邏輯
   const handleDelete = () => {
-    if (!editingExpense) return; // 如果沒有正在編輯的項目，則不執行
+    if (!editingExpense) return;
     if (window.confirm('確定要刪除這筆開銷嗎？')) {
       onUpdateExpenses(expenses.filter(e => e.id !== editingExpense.id));
       setIsFormOpen(false);
-      setEditingExpense(null); // 清理狀態
+      setEditingExpense(null);
     }
   };
 
@@ -95,7 +96,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
     if (!formData.title.trim() || !formData.amount) return;
     const newOrUpdatedExpense: Expense = {
       id: editingExpense ? editingExpense.id : uuidv4(),
-      trip_id: currentTrip.id, // 確保 trip_id 被設置
+      trip_id: currentTrip.id,
       ...formData,
       amount: Number(formData.amount) || 0,
     };
@@ -105,7 +106,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
     updatedList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     onUpdateExpenses(updatedList);
     setIsFormOpen(false);
-    setEditingExpense(null); // 清理狀態
+    setEditingExpense(null);
   };
 
   const getCategoryConfig = (catId: Expense['category']) => CATEGORIES.find(c => c.id === catId) || CATEGORIES[5];
@@ -212,18 +213,35 @@ const Expenses: React.FC<ExpensesProps> = ({ currentTrip, expenses, onUpdateExpe
                     <input required type="date" className="w-full p-3 rounded-xl border-2 border-stone-200 bg-white" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
                 </div>
             </div>
+           
+           {/* ✨ [修改處] 將 Select 改為 Icon Buttons */}
            <div>
-                <label className="block text-xs font-bold text-stone-600 mb-1">類別</label>
-                <select className="w-full p-3 rounded-xl border-2 border-stone-200 bg-white" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value as Expense['category']})}>
-                    {CATEGORIES.map(cat => <option key={cat.id}>{cat.label}</option>)}
-                </select>
+              <label className="block text-xs font-bold text-stone-600 mb-2">類別</label>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                {CATEGORIES.map(cat => {
+                  const isSelected = formData.category === cat.id;
+                  return (
+                    <button 
+                      type="button" 
+                      key={cat.id} 
+                      onClick={() => setFormData({...formData, category: cat.id})}
+                      className={`p-2 rounded-xl border-2 flex flex-col items-center justify-center gap-2 font-bold transition-all text-sm ${isSelected ? 'bg-white border-stone-700 shadow-sm scale-105' : 'bg-stone-50 border-stone-200 text-stone-500 hover:border-stone-400'}`}
+                    >
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${cat.color} ${isSelected ? cat.darkColor.replace('bg-','text-') : '' }`}>
+                        <cat.icon size={16} />
+                      </div>
+                      <span className="truncate">{cat.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
+
            <div>
               <label className="block text-xs font-bold text-stone-600 mb-1">備註 (選填)</label>
-              <textarea rows={2} className="w-full p-3 rounded-xl border-2 border-stone-200 resize-none" value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} />
+              <textarea rows={2} className="w-full p-3 rounded-xl border-2 border-stone-200 resize-none" value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.gittarget.value})} />
            </div>
            <div className="flex gap-3 pt-2">
-            {/* ✨ 修正後的刪除按鈕 */}
             {editingExpense && <Button type="button" variant="danger" onClick={handleDelete} className="mr-auto"><Trash2 size={16} /></Button>}
             <Button variant="secondary" type="button" onClick={() => setIsFormOpen(false)}>取消</Button>
             <Button type="submit" className="bg-stone-800 text-white">儲存</Button>
