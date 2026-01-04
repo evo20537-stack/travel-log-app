@@ -31,17 +31,8 @@ const App: React.FC = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-
-        // 讀取個人資料（含匯率）
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', 'default_user')
-          .single();
-
-        if (profileError) {
-          console.error('Error fetching profile:', profileError);
-        } else if (profileData) {
+        const { data: profileData, error: profileError } = await supabase.from('profiles').select('*').eq('id', 'default_user').single();
+        if (profileData) {
           setUserProfile({ 
             id: 'default_user',
             name: profileData.name || '旅人', 
@@ -50,7 +41,6 @@ const App: React.FC = () => {
           });
         }
 
-        // 抓取旅程
         const { data: tripsData, error: tripsError } = await supabase.from('trips').select('*').order('created_at', { ascending: true });
         if (tripsError) {
           console.error('Error fetching trips:', tripsError);
@@ -58,22 +48,14 @@ const App: React.FC = () => {
         } else {
           const fetchedTrips = tripsData || [];
           setTrips(fetchedTrips);
-
           const tripIds = fetchedTrips.map(t => t.id);
           if (tripIds.length > 0) {
-            // 並行抓取所有相關資料
             const [eventsRes, expensesRes, bookingsRes, checklistsRes] = await Promise.all([
               supabase.from('events').select('*').in('trip_id', tripIds),
               supabase.from('expenses').select('*').in('trip_id', tripIds),
               supabase.from('bookings').select('*').in('trip_id', tripIds),
               supabase.from('checklists').select('*').in('trip_id', tripIds),
             ]);
-
-            // 檢查每一個抓取的錯誤
-            if (eventsRes.error) console.error('Error fetching events:', eventsRes.error);
-            if (expensesRes.error) console.error('Error fetching expenses:', expensesRes.error);
-            if (bookingsRes.error) console.error('Error fetching bookings:', bookingsRes.error);
-            if (checklistsRes.error) console.error('Error fetching checklists:', checklistsRes.error);
 
             const groupById = (data: any[] | null) => (data || []).reduce((acc, item) => {
               (acc[item.trip_id] = acc[item.trip_id] || []).push(item);
@@ -95,18 +77,11 @@ const App: React.FC = () => {
     fetchData();
   }, []);
 
-  // 更新個人資料函式
   const handleUpdateUserProfile = async (profileData: Omit<Profile, 'id'>) => {
     setUserProfile(prev => ({ ...prev, ...profileData }));
-    await supabase.from('profiles').upsert({ 
-      id: 'default_user', 
-      name: profileData.name, 
-      avatar: profileData.avatar,
-      exchange_rate: profileData.exchangeRate 
-    });
+    await supabase.from('profiles').upsert({ id: 'default_user', ...profileData });
   };
 
-  // 通用更新器
   const createUpdateHandler = (setter: any, tableName: string) => async (updatedData: any[]) => {
     if (!currentTripId) return;
     setter((prev: any) => ({ ...prev, [currentTripId]: updatedData }));
@@ -115,6 +90,62 @@ const App: React.FC = () => {
       await supabase.from(tableName).upsert(updatedData.map(item => ({ ...item, trip_id: currentTripId })));
     }
   };
+
+  const handleAddTrip = async (tripData: Omit<Trip, 'id' | 'status' | 'image_offset' | 'color'>) => {
+    const { data: newTrip, error } = await supabase
+      .from('trips')
+      .insert({ ...tripData, status: '準備中' })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding trip:', error);
+      alert('新增旅程失敗！');
+    } else if (newTrip) {
+      const newTrips = [...trips, newTrip];
+      setTrips(newTrips);
+      setCurrentTripId(newTrip.id);
+      localStorage.setItem('travel_current_trip_id', newTrip.id);
+      setActiveTab(AppTab.DASHBOARD);
+    }
+  };
+
+  const handleEditTrip = async (tripData: Trip) => {
+    const { data: updatedTrip, error } = await supabase
+      .from('trips')
+      .update(tripData)
+      .eq('id', tripData.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating trip:', error);
+    } else if (updatedTrip) {
+      setTrips(trips.map(t => t.id === updatedTrip.id ? updatedTrip : t));
+    }
+  };
+
+  const handleDeleteTrip = async (tripId: string) => {
+    const tablesToDeleteFrom = ['events', 'expenses', 'bookings', 'checklists'];
+    for (const table of tablesToDeleteFrom) {
+      await supabase.from(table).delete().eq('trip_id', tripId);
+    }
+
+    const { error } = await supabase.from('trips').delete().eq('id', tripId);
+
+    if (error) {
+      console.error('Error deleting trip:', error);
+    } else {
+      const remainingTrips = trips.filter(t => t.id !== tripId);
+      setTrips(remainingTrips);
+      if (currentTripId === tripId) {
+        const newCurrentTripId = remainingTrips.length > 0 ? remainingTrips[0].id : '';
+        setCurrentTripId(newCurrentTripId);
+        localStorage.setItem('travel_current_trip_id', newCurrentTripId);
+      }
+    }
+  };
+
 
   const renderContent = () => {
     if (loading) return <div className="flex items-center justify-center min-h-screen">載入中...</div>;
@@ -125,11 +156,18 @@ const App: React.FC = () => {
         <Dashboard 
           trips={trips} 
           currentTripId={currentTripId} 
-          onAddTrip={async (data) => { /* 實作 AddTrip */ }}
+          onAddTrip={handleAddTrip}
+          onEditTrip={handleEditTrip}
+          onDeleteTrip={handleDeleteTrip}
           onNavigateTab={setActiveTab} 
           userProfile={userProfile}
           onUpdateUserProfile={handleUpdateUserProfile} 
-          events={[]} expenses={[]} onTripChange={setCurrentTripId} onEditTrip={()=>{}} onDeleteTrip={()=>{}} completedEventIds={new Set()} onCompleteEvent={()=>{}} onUndoCompleteEvent={()=>{}}
+          events={[]} 
+          expenses={[]} 
+          onTripChange={setCurrentTripId} 
+          completedEventIds={new Set()} 
+          onCompleteEvent={()=>{}} 
+          onUndoCompleteEvent={()=>{}}
         />
       );
     }
@@ -144,7 +182,7 @@ const App: React.FC = () => {
 
     switch (activeTab) {
       case AppTab.DASHBOARD: 
-        return <Dashboard {...commonProps} trips={trips} currentTripId={currentTripId} onTripChange={setCurrentTripId} onNavigateTab={setActiveTab} userProfile={userProfile} onUpdateUserProfile={handleUpdateUserProfile} completedEventIds={completedEventIds} onCompleteEvent={(id)=>setCompletedEventIds(prev=>new Set(prev).add(id))} onUndoCompleteEvent={(id)=>setCompletedEventIds(prev=>{const n=new Set(prev);n.delete(id);return n;})} onAddTrip={()=>{}} onEditTrip={()=>{}} onDeleteTrip={()=>{}} />;
+        return <Dashboard {...commonProps} trips={trips} currentTripId={currentTripId} onTripChange={setCurrentTripId} onNavigateTab={setActiveTab} userProfile={userProfile} onUpdateUserProfile={handleUpdateUserProfile} completedEventIds={completedEventIds} onCompleteEvent={(id)=>setCompletedEventIds(prev=>new Set(prev).add(id))} onUndoCompleteEvent={(id)=>setCompletedEventIds(prev=>{const n=new Set(prev);n.delete(id);return n;})} onAddTrip={handleAddTrip} onEditTrip={handleEditTrip} onDeleteTrip={handleDeleteTrip} />;
       case AppTab.SCHEDULE: return <Schedule {...commonProps} onUpdateEvents={createUpdateHandler(setAllEvents, 'events')} />;
       case AppTab.BOOKINGS: return <Bookings {...commonProps} onUpdateBookings={createUpdateHandler(setAllBookings, 'bookings')} />;
       case AppTab.EXPENSES: return <Expenses {...commonProps} onUpdateExpenses={createUpdateHandler(setAllExpenses, 'expenses')} exchangeRates={{ TWD: userProfile.exchangeRate }} />;
