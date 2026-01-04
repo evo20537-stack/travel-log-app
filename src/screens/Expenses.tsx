@@ -31,7 +31,7 @@ const Expenses: React.FC<ExpensesProps> = ({
   currentTrip, 
   expenses, 
   onUpdateExpenses, 
-  exchangeRates = { TWD: 0.22 } // [✨ 修正點] 加入預設值
+  exchangeRates = { TWD: 0.22 } 
 }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
