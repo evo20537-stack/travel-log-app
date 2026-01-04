@@ -110,18 +110,18 @@ const App: React.FC = () => {
     }
   };
 
-  const handleEditTrip = async (tripData: Trip) => {
+  const handleEditTrip = async (id: string, data: Partial<Trip>) => {
     const { data: updatedTrip, error } = await supabase
       .from('trips')
-      .update(tripData)
-      .eq('id', tripData.id)
+      .update(data)
+      .eq('id', id)
       .select()
       .single();
 
     if (error) {
       console.error('Error updating trip:', error);
     } else if (updatedTrip) {
-      setTrips(trips.map(t => t.id === updatedTrip.id ? updatedTrip : t));
+      setTrips(trips.map(t => t.id === updatedTrip.id ? { ...t, ...updatedTrip } : t));
     }
   };
 
