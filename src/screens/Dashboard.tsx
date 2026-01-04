@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   MapPin, Sun, Calendar as CalendarIcon, RotateCcw, X, Map, Wallet, CheckCircle, AlertTriangle, Navigation
@@ -13,7 +12,7 @@ import AddAdventureCard from '../components/Dashboard/AddAdventureCard';
 import TripModal from '../components/Dashboard/TripModal';
 import ProfileModal from '../components/Dashboard/ProfileModal';
 import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
+import { Button } from '../components/ui/Button';
 
 interface DashboardProps {
   trips: Trip[];

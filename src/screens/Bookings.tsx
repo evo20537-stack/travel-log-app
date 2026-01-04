@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import Modal from '../components/ui/Modal';
-import Button from '../components/ui/Button';
+import { Button } from '../components/ui/Button';
 import { Trip, Booking } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { format, parseISO } from 'date-fns';
-import { Plane, BedDouble, Ticket, MoreHorizontal, Plus, Edit2, Trash2, CheckCircle, Clock, Copy, CalendarPlus, Building, Train, Star } from 'lucide-react';
+import { Plane, Building, Ticket, Star, Plus, Trash2, CheckCircle, Clock, Copy, MapPin } from 'lucide-react';
 
-// --- 全新的 Props 和分類定義 ---
+// --- Props 和分類定義 ---
 interface BookingsProps {
   currentTrip: Trip;
   bookings: Booking[];
@@ -23,39 +23,20 @@ const CATEGORY_MAP: Record<BookingCategory, { icon: React.ElementType, color: st
   '其他': { icon: Star, color: 'bg-stone-100 text-stone-500', verb: '預訂' },
 };
 
-// --- 全新的達人級功能：產生行事曆檔案 ---
-const generateICS = (booking: Booking) => {
-  const cal = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//YourAppName//NONSGML v1.0//EN',
-    'BEGIN:VEVENT',
-    `UID:${booking.id}@yourapp.com`,
-    `DTSTAMP:${format(new Date(), "yyyyMMdd'T'HHmmss'Z'")}`,
-    `DTSTART;VALUE=DATE:${format(parseISO(booking.date), 'yyyyMMdd')}`,
-    `SUMMARY:${booking.title}`,
-    `DESCRIPTION:預訂號碼: ${booking.confirmation_number || '無'}. 備註: ${booking.notes || '無'}`, 
-    'END:VEVENT',
-    'END:VCALENDAR'
-  ].join('\r\n');
-  
-  const blob = new Blob([cal], { type: 'text/calendar' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${booking.title}.ics`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
-
-// --- 全新的票券元件 ---
+// --- 票券元件 (已更新) ---
 const BookingTicket: React.FC<{ booking: Booking; onEdit: () => void; }> = ({ booking, onEdit }) => {
   const config = CATEGORY_MAP[booking.category] || CATEGORY_MAP['其他'];
   const Icon = config.icon;
   const statusConfig = {
       '已完成': { text: '已確認', color: 'bg-green-100 text-green-700', icon: <CheckCircle size={14}/> },
       '待處理': { text: '待確認', color: 'bg-yellow-100 text-yellow-700', icon: <Clock size={14}/> }
+  }
+
+  const handleMapClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (booking.map_url) {
+      window.open(booking.map_url, '_blank', 'noopener,noreferrer');
+    }
   }
 
   return (
@@ -73,7 +54,15 @@ const BookingTicket: React.FC<{ booking: Booking; onEdit: () => void; }> = ({ bo
               </div>
               {(booking.notes || booking.date) && 
                 <div className="mt-3 text-sm space-y-2 text-stone-600">
-                    {booking.date && <p><span className="font-bold">日期:</span> {format(parseISO(booking.date), 'yyyy / MM / dd')}</p>}
+                    {booking.date && (
+                      <p>
+                        <span className="font-bold">
+                          {booking.category === '住宿' ? '期間:' : '日期:'}
+                        </span>{' '}
+                        {format(parseISO(booking.date), 'yyyy / MM / dd')}
+                        {booking.category === '住宿' && booking.end_date && ` - ${format(parseISO(booking.end_date), 'MM / dd')}`}
+                      </p>
+                    )}
                     {booking.notes && <p className="whitespace-pre-wrap"><span className="font-bold">備註:</span> {booking.notes}</p>}
                 </div>
               }
@@ -92,18 +81,22 @@ const BookingTicket: React.FC<{ booking: Booking; onEdit: () => void; }> = ({ bo
                           ><Copy size={14} /></button>}
                   </div>
               </div>
-              <button 
-                onClick={(e) => { e.stopPropagation(); generateICS(booking); }}
-                className="ml-3 shrink-0 flex items-center gap-2 text-xs font-bold text-indigo-500 bg-indigo-50 px-3 py-2 rounded-lg hover:bg-indigo-100 transition-colors"
-              >
-                  <CalendarPlus size={14} /> 新增至行事曆
-              </button>
+              <div className="flex items-center gap-2">
+                {booking.map_url &&
+                  <button 
+                    onClick={handleMapClick}
+                    className="shrink-0 flex items-center gap-2 text-xs font-bold text-cyan-500 bg-cyan-50 px-3 py-2 rounded-lg hover:bg-cyan-100 transition-colors"
+                  >
+                      <MapPin size={14} /> 地圖
+                  </button>
+                }
+              </div>
           </div>
       </div>
   )
 }
 
-// --- 主元件 ---
+// --- 主元件 (已更新) ---
 const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBookings }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
@@ -114,8 +107,10 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
     category: '機票',
     status: '已完成',
     date: new Date().toISOString().split('T')[0],
+    end_date: '',
     confirmation_number: '',
     notes: '',
+    map_url: '',
   });
 
   const handleOpenAdd = () => {
@@ -125,8 +120,10 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
       category: activeCategory,
       status: '已完成',
       date: new Date().toISOString().split('T')[0],
+      end_date: '',
       confirmation_number: '',
       notes: '',
+      map_url: '',
     });
     setIsFormOpen(true);
   };
@@ -138,8 +135,10 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
       category: booking.category,
       status: booking.status,
       date: booking.date.split('T')[0],
+      end_date: booking.end_date || '',
       confirmation_number: booking.confirmation_number || '',
       notes: booking.notes || '',
+      map_url: booking.map_url || '',
     });
     setIsFormOpen(true);
   };
@@ -154,10 +153,15 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim()) return;
+    
+    const dataToSave: any = { ...formData };
+    if (dataToSave.category !== '住宿') {
+      dataToSave.end_date = undefined;
+    }
 
     const newOrUpdatedBooking: Booking = {
       id: editingBooking ? editingBooking.id : uuidv4(),
-      ...formData,
+      ...dataToSave,
     };
 
     let updatedList = editingBooking 
@@ -174,7 +178,6 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
       [bookings, activeCategory]
   );
   
-  // --- 語法修正：將 Icon 元件賦值給大寫字母開頭的變數 ---
   const EmptyStateIcon = CATEGORY_MAP[activeCategory].icon;
 
   return (
@@ -215,7 +218,7 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
         )}
       </div>
 
-      <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title={editingBooking ? `編輯${formData.category}` : `新增${formData.category}`}>
+      <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title={editingBooking ? `編輯${formData.category}` : `新增${formData.category}`}>\
         <form onSubmit={handleSave} className="space-y-4">
           <div>
               <label className="block text-xs font-bold text-stone-600 mb-1">標題</label>
@@ -237,13 +240,32 @@ const Bookings: React.FC<BookingsProps> = ({ currentTrip, bookings, onUpdateBook
                 </select>
             </div>
            </div>
-           <div>
+           
+           {formData.category === '住宿' ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-stone-600 mb-1">入住日期</label>
+                  <input type="date" required className="w-full p-3 rounded-xl border-2 border-stone-200 bg-white font-bold" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})}/>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-600 mb-1">退房日期</label>
+                  <input type="date" className="w-full p-3 rounded-xl border-2 border-stone-200 bg-white font-bold" value={formData.end_date} onChange={e => setFormData({...formData, end_date: e.target.value})}/>
+                </div>
+              </div>
+            ) : (
+              <div>
                 <label className="block text-xs font-bold text-stone-600 mb-1">日期</label>
                 <input type="date" required className="w-full p-3 rounded-xl border-2 border-stone-200 bg-white font-bold" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})}/>
-           </div>
+              </div>
+            )}
+
            <div>
               <label className="block text-xs font-bold text-stone-600 mb-1">預訂編號 (選填)</label>
               <input className="w-full p-3 rounded-xl border-2 border-stone-200 font-mono" value={formData.confirmation_number} onChange={e => setFormData({...formData, confirmation_number: e.target.value})} />
+           </div>
+           <div>
+              <label className="block text-xs font-bold text-stone-600 mb-1">地圖連結 (選填)</label>
+              <input type="url" placeholder="https://maps.app.goo.gl/..." className="w-full p-3 rounded-xl border-2 border-stone-200 font-mono" value={formData.map_url} onChange={e => setFormData({...formData, map_url: e.target.value})} />
            </div>
            <div>
               <label className="block text-xs font-bold text-stone-600 mb-1">備註 (選填)</label>
